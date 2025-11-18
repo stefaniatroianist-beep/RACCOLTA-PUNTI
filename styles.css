@@ -1,0 +1,45 @@
+:root{
+  --bg:#f7f7fb;
+  --card:#ffffff;
+  --accent:#2b6cb0;
+  --danger:#e53e3e;
+}
+*{box-sizing:border-box;font-family:Inter, system-ui, Arial, sans-serif}
+body{margin:0;background:var(--bg);color:#111}
+.container{max-width:760px;margin:32px auto;padding:20px}
+h1{margin:0 0 18px;font-size:1.6rem}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(11,22,39,0.06)}
+.hidden{display:none}
+.row{display:flex;gap:8px}
+input,textarea,button{font-size:1rem;padding:8px;border-radius:8px;border:1px solid #d8ddec}
+input[readonly]{background:#efefef}
+.field{margin:10px 0}
+.field label{display:block;font-size:0.85rem;margin-bottom:6px;color:#333}
+.points{margin:10px 0}
+.points-row{display:flex;align-items:center;gap:12px}
+.points-value{font-weight:700;font-size:1.2rem;padding:10px 14px;border-radius:8px;background:#f1f7ff}
+.points-buttons button.small{padding:6px 10px;border-radius:8px}
+.manual{margin-top:8px;display:flex;gap:8px}
+.actions{margin-top:12px;display:flex;gap:8px}
+button{cursor:pointer;background:var(--accent);color:white;border:none}
+button.danger{background:var(--danger)}
+.status{margin-top:10px;color:#555;font-size:0.9rem}
+footer{margin-top:18px;color:#666;font-size:0.8rem}
+
+.transactions {
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+}
+.transaction-item {
+  padding: 8px;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 0.9rem;
+}
+.transaction-item:last-child { border-bottom: none; }
+.t-positive { color: green; font-weight: 600; }
+.t-negative { color: red; font-weight: 600; }
