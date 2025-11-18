@@ -5,14 +5,27 @@ import {
   collection, addDoc, serverTimestamp, query, orderBy
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-// === INSERISCI QUI LA TUA CONFIGURAZIONE FIREBASE ===
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "INSERISCI",
-  authDomain: "INSERISCI",
-  projectId: "INSERISCI",
-  storageBucket: "INSERISCI",
-  messagingSenderId: "INSERISCI",
-  appId: "INSERISCI"
+  apiKey: "AIzaSyCctBq0nelD9HsjjmghFdSs6rN1vBA67Co",
+  authDomain: "tessera-punti-pina.firebaseapp.com",
+  projectId: "tessera-punti-pina",
+  storageBucket: "tessera-punti-pina.firebasestorage.app",
+  messagingSenderId: "280210595024",
+  appId: "1:280210595024:web:2c056ee1c34ba8cf76d2d5",
+  measurementId: "G-S2XMRXLMJ5"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 };
 
 const app = initializeApp(firebaseConfig);
