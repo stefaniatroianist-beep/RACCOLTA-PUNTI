@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Raccolta Punti Clienti</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css"><!-- oppure stili.css se il file ha quel nome -->
 </head>
 
 <body>
@@ -129,3 +129,23 @@
 
         <div class="actions">
           <button id="btnSave">💾 Salva</button>
+          <button id="btnWhats">💬 WhatsApp</button>
+          <button id="btnDelete" class="danger">🗑 Elimina cliente</button>
+        </div>
+
+        <div id="status" class="status"></div>
+      </section>
+
+      <footer>
+        <small>Versione con login — protetta da Firebase Authentication.</small>
+      </footer>
+
+    </section>
+
+  </main>
+
+  <!-- COLLEGAMENTO AL JAVASCRIPT -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
