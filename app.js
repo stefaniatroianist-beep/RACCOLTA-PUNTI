@@ -1,3 +1,5 @@
+// app.js (corretto)
+
 // SDK Firebase via CDN (corretto per browser)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
@@ -20,7 +22,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- TUTTO IL RESTO DEL TUO CODICE È RIMASTO UGUALE ---
+// -------------------------------------------------------------------------
+// TUTTO IL RESTO DEL CODICE È CORRETTO E RESTA UGUALE
+// -------------------------------------------------------------------------
 
 // DOM
 const phoneInput = document.getElementById('phoneInput');
