@@ -1,80 +1,128 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Raccolta punti clienti</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raccolta Punti Clienti</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <main class="container">
     <h1>Raccolta Punti — Gestione Clienti</h1>
 
-    <section class="search">
-      <label>Numero di telefono (accesso/ricerca)</label>
-      <div class="row">
-        <input id="phoneInput" placeholder="es. +393331234567" />
-        <button id="btnLoad">Apri scheda</button>
-        <button id="btnNew">Nuovo cliente</button>
+    <!-- ============================ -->
+    <!-- LOGIN SECTION -->
+    <!-- ============================ -->
+    <section id="loginSection" class="card">
+      <h2>Accesso riservato</h2>
+
+      <div class="field">
+        <label>Email</label>
+        <input id="loginEmail" type="email" placeholder="La tua email di accesso">
       </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input id="loginPassword" type="password" placeholder="Password">
+      </div>
+
+      <div class="actions">
+        <button id="btnLogin">🔓 Entra</button>
+      </div>
+
+      <div id="loginStatus" class="status"></div>
     </section>
 
-    <section id="card" class="card hidden">
-      <h2>Scheda Cliente</h2>
-      <div class="field">
-        <label>Numero</label>
-        <input id="phone" readonly />
+    <!-- ============================ -->
+    <!-- MAIN APP SECTION (HIDDEN UNTIL LOGIN) -->
+    <!-- ============================ -->
+    <section id="appSection" class="hidden">
+
+      <div class="card">
+        <div class="actions" style="justify-content: space-between;">
+          <div><strong>Utente loggato:</strong> <span id="currentUserEmail"></span></div>
+          <button id="btnLogout" class="danger">🔒 Esci</button>
+        </div>
       </div>
 
-      <div class="field">
-        <label>Nome</label>
-        <input id="firstName" />
-      </div>
+      <!-- ============================ -->
+      <!-- SEARCH CLIENT -->
+      <!-- ============================ -->
+      <section class="search">
+        <label>Numero di telefono (accesso/ricerca)</label>
+        <div class="row">
+          <input id="phoneInput" placeholder="es. +393331234567">
+          <button id="btnLoad">Apri scheda</button>
+          <button id="btnNew">Nuovo cliente</button>
+        </div>
+      </section>
 
-      <div class="field">
-        <label>Cognome</label>
-        <input id="lastName" />
-      </div>
+      <!-- ============================ -->
+      <!-- CLIENT CARD -->
+      <!-- ============================ -->
+      <section id="card" class="card hidden">
+        <h2>Scheda Cliente</h2>
 
-      <div class="field">
-        <label>Note</label>
-        <textarea id="notes" rows="4"></textarea>
-      </div>
+        <div class="field">
+          <label>Numero</label>
+          <input id="phone" readonly>
+        </div>
 
-      <div class="points">
-        <label>Punti attuali</label>
-        <div class="points-row">
-          <div id="pointsValue" class="points-value">0</div>
-          <div class="points-buttons">
-            <button class="small" data-delta="1">+1</button>
-            <button class="small" data-delta="5">+5</button>
-            <button class="small" data-delta="-1">-1</button>
-            <button class="small" data-delta="-5">-5</button>
+        <div class="field">
+          <label>Nome</label>
+          <input id="firstName">
+        </div>
+
+        <div class="field">
+          <label>Cognome</label>
+          <input id="lastName">
+        </div>
+
+        <div class="field">
+          <label>Note</label>
+          <textarea id="notes" rows="4"></textarea>
+        </div>
+
+        <!-- ============================ -->
+        <!-- POINTS -->
+        <!-- ============================ -->
+        <div class="points">
+          <label>Punti attuali</label>
+          <div class="points-row">
+            <div id="pointsValue" class="points-value">0</div>
+
+            <div class="points-buttons">
+              <button class="small" data-delta="1">+1</button>
+              <button class="small" data-delta="5">+5</button>
+              <button class="small" data-delta="-1">-1</button>
+              <button class="small" data-delta="-5">-5</button>
+            </div>
+          </div>
+
+          <div class="manual">
+            <input id="manualDelta" type="number" placeholder="Inserisci numero">
+            <button id="btnAddManual">AGGIUNGI</button>
+            <button id="btnSubManual">SCALA</button>
           </div>
         </div>
 
-        <div class="manual">
-          <input id="manualDelta" type="number" placeholder="Inserisci numero" />
-          <button id="btnAddManual">AGGIUNGI</button>
-          <button id="btnSubManual">SCALA</button>
+        <h3>Storico transazioni</h3>
+        <div id="transactionsList" class="transactions"></div>
+
+        <div class="actions">
+          <button id="btnSave">💾 Salva</button>
+          <button id="btnWhats">💬 Invia WhatsApp</button>
+          <button id="btnDelete" class="danger">🗑 Elimina cliente</button>
         </div>
-      </div>
 
-      <h3>Storico transazioni</h3>
-      <div id="transactionsList" class="transactions"></div>
+        <div id="status" class="status"></div>
+      </section>
 
-      <div class="actions">
-        <button id="btnSave">💾 Salva</button>
-        <button id="btnWhats">💬 Invia WhatsApp</button>
-        <button id="btnDelete" class="danger">🗑 Elimina cliente</button>
-      </div>
-
-      <div id="status" class="status"></div>
+      <footer>
+        <small>Versione con login — dati salvati su Firebase Firestore in maniera sicura.</small>
+      </footer>
     </section>
-
-    <footer>
-      <small>Versione completa — ricordati di inserire la tua firebaseConfig.</small>
-    </footer>
   </main>
 
   <script type="module" src="app.js"></script>
