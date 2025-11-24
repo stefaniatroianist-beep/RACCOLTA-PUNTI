@@ -9,6 +9,7 @@
 
 <body>
   <main class="container">
+
     <h1>Raccolta Punti — Gestione Clienti</h1>
 
     <!-- ============================ -->
@@ -35,7 +36,7 @@
     </section>
 
     <!-- ============================ -->
-    <!-- MAIN APP SECTION (HIDDEN UNTIL LOGIN) -->
+    <!-- MAIN APP SECTION -->
     <!-- ============================ -->
     <section id="appSection" class="hidden">
 
@@ -47,19 +48,35 @@
       </div>
 
       <!-- ============================ -->
-      <!-- SEARCH CLIENT -->
+      <!-- RICERCA CLIENTE: TELEFONO -->
       <!-- ============================ -->
       <section class="search">
+
         <label>Numero di telefono (accesso/ricerca)</label>
         <div class="row">
-          <input id="phoneInput" placeholder="es. +393331234567">
+          <input id="phoneInput" placeholder="es. 3478552229 o +39 347...">
           <button id="btnLoad">Apri scheda</button>
           <button id="btnNew">Nuovo cliente</button>
         </div>
+
+        <!-- ============================ -->
+        <!-- RICERCA PER NOME/COGNOME -->
+        <!-- ============================ -->
+        <label style="margin-top:1rem;">Ricerca per nome o cognome</label>
+        <div class="row">
+          <input id="nameSearchInput" placeholder="es. Maria, Rossi, Maria Rossi">
+          <button id="btnSearchName">Cerca</button>
+        </div>
+      </section>
+
+      <!-- RISULTATI RICERCA -->
+      <section id="searchResults" class="card hidden">
+        <h3>Risultati ricerca</h3>
+        <div id="searchResultsList" class="transactions"></div>
       </section>
 
       <!-- ============================ -->
-      <!-- CLIENT CARD -->
+      <!-- SCHEDA CLIENTE -->
       <!-- ============================ -->
       <section id="card" class="card hidden">
         <h2>Scheda Cliente</h2>
@@ -85,7 +102,7 @@
         </div>
 
         <!-- ============================ -->
-        <!-- POINTS -->
+        <!-- PUNTI -->
         <!-- ============================ -->
         <div class="points">
           <label>Punti attuali</label>
@@ -112,19 +129,3 @@
 
         <div class="actions">
           <button id="btnSave">💾 Salva</button>
-          <button id="btnWhats">💬 Invia WhatsApp</button>
-          <button id="btnDelete" class="danger">🗑 Elimina cliente</button>
-        </div>
-
-        <div id="status" class="status"></div>
-      </section>
-
-      <footer>
-        <small>Versione con login — dati salvati su Firebase Firestore in maniera sicura.</small>
-      </footer>
-    </section>
-  </main>
-
-  <script type="module" src="app.js"></script>
-</body>
-</html>
