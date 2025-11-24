@@ -11,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 // ===============================
-// Firebase Configuration
+// Firebase config
 // ===============================
 const firebaseConfig = {
   apiKey: "AIzaSyCctBq0nelD9HsjjmghFdSs6rN1vBA67Co",
@@ -24,7 +24,7 @@ const firebaseConfig = {
 };
 
 // ===============================
-// Initialize Firebase
+// Init Firebase
 // ===============================
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -44,12 +44,12 @@ const btnLogout = document.getElementById("btnLogout");
 const currentUserEmail = document.getElementById("currentUserEmail");
 const loginStatus = document.getElementById("loginStatus");
 
-// Ricerca per telefono
+// Search by phone
 const phoneInput = document.getElementById("phoneInput");
 const btnLoad = document.getElementById("btnLoad");
 const btnNew = document.getElementById("btnNew");
 
-// Scheda cliente
+// Client card
 const card = document.getElementById("card");
 const phoneField = document.getElementById("phone");
 const firstName = document.getElementById("firstName");
@@ -68,32 +68,28 @@ const btnSubManual = document.getElementById("btnSubManual");
 const status = document.getElementById("status");
 const transactionsList = document.getElementById("transactionsList");
 
-// Ricerca per nome/cognome
+// Search by name/surname
 const nameSearchInput = document.getElementById("nameSearchInput");
 const btnSearchName = document.getElementById("btnSearchName");
 const searchResults = document.getElementById("searchResults");
 const searchResultsList = document.getElementById("searchResultsList");
 
-// Stato
+// State
 let unsubscribeRealtime = null;
 let unsubscribeTransactions = null;
 let currentPhone = null;
 
 // ===============================
-// PHONE NORMALIZATION (+39 AUTO)
+// PHONE NORMALIZATION (+39)
 // ===============================
 function normalizePhone(p) {
   let digits = (p || "").replace(/\D/g, "");
-
   if (!digits) return "";
 
-  // Se inizia con "3" (es. 347...), aggiungiamo "39" davanti
+  // If starts with "3" (es: 347...), add 39
   if (digits.startsWith("3")) {
     digits = "39" + digits;
   }
-
-  // Se inizia già con "39", lasciamo così
-  // (es. 39347... viene considerato già con prefisso)
   return "+" + digits;
 }
 
@@ -126,7 +122,6 @@ btnLogout.addEventListener("click", async () => {
   await signOut(auth);
 });
 
-// Gestisce visibilità delle sezioni
 onAuthStateChanged(auth, (user) => {
   if (user) {
     loginSection.classList.add("hidden");
@@ -158,7 +153,7 @@ function showStatus(msg, isError = false) {
 }
 
 // ===============================
-// RICERCA / CREAZIONE PER TELEFONO
+// SEARCH / CREATE BY PHONE
 // ===============================
 btnNew.addEventListener("click", () => {
   const p = normalizePhone(phoneInput.value);
@@ -173,7 +168,7 @@ btnLoad.addEventListener("click", () => {
 });
 
 // ===============================
-// RICERCA PER NOME / COGNOME
+// SEARCH BY NAME / SURNAME
 // ===============================
 btnSearchName.addEventListener("click", async () => {
   const term = (nameSearchInput.value || "").trim().toLowerCase();
@@ -261,7 +256,7 @@ function renderSearchResults(matches, term) {
 }
 
 // ===============================
-// APERTURA CLIENTE + REALTIME
+// OPEN CLIENT + REALTIME
 // ===============================
 async function openClient(phone, forceCreate = false) {
   currentPhone = phone;
@@ -319,7 +314,7 @@ async function openClient(phone, forceCreate = false) {
 }
 
 // ===============================
-// RENDER CLIENTE
+// RENDER CLIENT
 // ===============================
 function renderClient(phone, data) {
   card.classList.remove("hidden");
@@ -331,7 +326,7 @@ function renderClient(phone, data) {
 }
 
 // ===============================
-// RENDER STORICO
+// RENDER TRANSACTIONS
 // ===============================
 function renderTransactions(arr) {
   transactionsList.innerHTML = "";
@@ -364,7 +359,7 @@ function renderTransactions(arr) {
 }
 
 // ===============================
-// SALVATAGGIO ANAGRAFICA
+// SAVE CLIENT DATA
 // ===============================
 btnSave.addEventListener("click", async () => {
   if (!currentPhone) return;
@@ -390,7 +385,7 @@ btnSave.addEventListener("click", async () => {
 });
 
 // ===============================
-// GESTIONE PUNTI
+// POINTS MANAGEMENT
 // ===============================
 document.querySelectorAll(".points-buttons button").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -455,14 +450,13 @@ btnWhats.addEventListener("click", () => {
 
   const text = encodeURIComponent(`Ciao ${firstName.value || ""}!`);
   const sanitized = normalizePhone(currentPhone).replace(/\D/g, "");
-
   if (!sanitized) return;
 
   window.open(`https://wa.me/${sanitized}?text=${text}`, "_blank");
 });
 
 // ===============================
-// ELIMINA CLIENTE
+// DELETE CLIENT
 // ===============================
 btnDelete.addEventListener("click", async () => {
   if (!currentPhone) return;
@@ -484,3 +478,4 @@ function hideCard() {
   if (unsubscribeRealtime) unsubscribeRealtime();
   if (unsubscribeTransactions) unsubscribeTransactions();
 }
+
