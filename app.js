@@ -33,9 +33,10 @@ const auth = getAuth(app);
 // ===============================
 // DOM ELEMENTS
 // ===============================
+
+// Login
 const loginSection = document.getElementById("loginSection");
 const appSection = document.getElementById("appSection");
-
 const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const btnLogin = document.getElementById("btnLogin");
@@ -43,34 +44,37 @@ const btnLogout = document.getElementById("btnLogout");
 const currentUserEmail = document.getElementById("currentUserEmail");
 const loginStatus = document.getElementById("loginStatus");
 
-const phoneInput = document.getElementById('phoneInput');
-const btnLoad = document.getElementById('btnLoad');
-const btnNew = document.getElementById('btnNew');
-const card = document.getElementById('card');
+// Ricerca per telefono
+const phoneInput = document.getElementById("phoneInput");
+const btnLoad = document.getElementById("btnLoad");
+const btnNew = document.getElementById("btnNew");
 
-const phoneField = document.getElementById('phone');
-const firstName = document.getElementById('firstName');
-const lastName = document.getElementById('lastName');
-const notes = document.getElementById('notes');
+// Scheda cliente
+const card = document.getElementById("card");
+const phoneField = document.getElementById("phone");
+const firstName = document.getElementById("firstName");
+const lastName = document.getElementById("lastName");
+const notes = document.getElementById("notes");
+const pointsValue = document.getElementById("pointsValue");
 
-const pointsValue = document.getElementById('pointsValue');
-const btnSave = document.getElementById('btnSave');
-const btnWhats = document.getElementById('btnWhats');
-const btnDelete = document.getElementById('btnDelete');
+const btnSave = document.getElementById("btnSave");
+const btnWhats = document.getElementById("btnWhats");
+const btnDelete = document.getElementById("btnDelete");
 
-const manualDelta = document.getElementById('manualDelta');
-const btnAddManual = document.getElementById('btnAddManual');
-const btnSubManual = document.getElementById('btnSubManual');
+const manualDelta = document.getElementById("manualDelta");
+const btnAddManual = document.getElementById("btnAddManual");
+const btnSubManual = document.getElementById("btnSubManual");
 
-const status = document.getElementById('status');
-const transactionsList = document.getElementById('transactionsList');
+const status = document.getElementById("status");
+const transactionsList = document.getElementById("transactionsList");
 
-// Nuovi elementi per ricerca per nome
-const nameSearchInput = document.getElementById('nameSearchInput');
-const btnSearchName = document.getElementById('btnSearchName');
-const searchResults = document.getElementById('searchResults');
-const searchResultsList = document.getElementById('searchResultsList');
+// Ricerca per nome/cognome
+const nameSearchInput = document.getElementById("nameSearchInput");
+const btnSearchName = document.getElementById("btnSearchName");
+const searchResults = document.getElementById("searchResults");
+const searchResultsList = document.getElementById("searchResultsList");
 
+// Stato
 let unsubscribeRealtime = null;
 let unsubscribeTransactions = null;
 let currentPhone = null;
@@ -79,14 +83,17 @@ let currentPhone = null;
 // PHONE NORMALIZATION (+39 AUTO)
 // ===============================
 function normalizePhone(p) {
-  let digits = p.replace(/\D/g, "");
+  let digits = (p || "").replace(/\D/g, "");
 
-  // Se inizia con "3", aggiungiamo "39" davanti
+  if (!digits) return "";
+
+  // Se inizia con "3" (es. 347...), aggiungiamo "39" davanti
   if (digits.startsWith("3")) {
     digits = "39" + digits;
   }
 
-  // Aggiungiamo il +
+  // Se inizia già con "39", lasciamo così
+  // (es. 39347... viene considerato già con prefisso)
   return "+" + digits;
 }
 
@@ -109,12 +116,12 @@ btnLogin.addEventListener("click", async () => {
     loginStatus.textContent = "Accesso effettuato!";
     loginStatus.style.color = "green";
   } catch (err) {
+    console.error(err);
     loginStatus.textContent = "Credenziali errate";
     loginStatus.style.color = "red";
   }
 });
 
-// Logout
 btnLogout.addEventListener("click", async () => {
   await signOut(auth);
 });
@@ -124,11 +131,15 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     loginSection.classList.add("hidden");
     appSection.classList.remove("hidden");
-    currentUserEmail.textContent = user.email;
+    currentUserEmail.textContent = user.email || "";
+    loginStatus.textContent = "";
   } else {
     appSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
     currentUserEmail.textContent = "";
+    loginEmail.value = "";
+    loginPassword.value = "";
+    loginStatus.textContent = "";
     hideCard();
     clearSearchResults();
   }
@@ -140,62 +151,67 @@ onAuthStateChanged(auth, (user) => {
 function showStatus(msg, isError = false) {
   if (!status) return;
   status.textContent = msg;
-  status.style.color = isError ? 'var(--danger)' : '#333';
+  status.style.color = isError ? "var(--danger)" : "#333";
   setTimeout(() => {
     if (status.textContent === msg) status.textContent = "";
   }, 4000);
 }
 
 // ===============================
-// BUTTONS NEW / LOAD CLIENT (telefono)
+// RICERCA / CREAZIONE PER TELEFONO
 // ===============================
-btnNew.addEventListener('click', () => {
+btnNew.addEventListener("click", () => {
   const p = normalizePhone(phoneInput.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, true);
 });
 
-btnLoad.addEventListener('click', () => {
+btnLoad.addEventListener("click", () => {
   const p = normalizePhone(phoneInput.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, false);
 });
 
 // ===============================
-// SEARCH BY NAME / SURNAME
+// RICERCA PER NOME / COGNOME
 // ===============================
-btnSearchName.addEventListener('click', async () => {
-  const term = nameSearchInput.value.trim().toLowerCase();
+btnSearchName.addEventListener("click", async () => {
+  const term = (nameSearchInput.value || "").trim().toLowerCase();
   if (!term) {
     clearSearchResults();
     showStatus("Inserisci un nome o cognome da cercare", true);
     return;
   }
 
-  // Leggiamo tutti i clienti e filtriamo lato client (per un negozio va benissimo)
-  const snap = await getDocs(collection(db, "clients"));
-  const matches = [];
-  snap.forEach(docSnap => {
-    const data = docSnap.data();
-    const fn = (data.firstName || "").toLowerCase();
-    const ln = (data.lastName || "").toLowerCase();
-    const full = (fn + " " + ln).trim();
+  try {
+    const snap = await getDocs(collection(db, "clients"));
+    const matches = [];
 
-    if (
-      fn.includes(term) ||
-      ln.includes(term) ||
-      full.includes(term)
-    ) {
-      matches.push({
-        phone: docSnap.id,
-        firstName: data.firstName || "",
-        lastName: data.lastName || "",
-        points: data.points || 0
-      });
-    }
-  });
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const fn = (data.firstName || "").toLowerCase();
+      const ln = (data.lastName || "").toLowerCase();
+      const full = (fn + " " + ln).trim();
 
-  renderSearchResults(matches, term);
+      if (
+        fn.includes(term) ||
+        ln.includes(term) ||
+        full.includes(term)
+      ) {
+        matches.push({
+          phone: docSnap.id,
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          points: data.points || 0
+        });
+      }
+    });
+
+    renderSearchResults(matches, term);
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore nella ricerca per nome", true);
+  }
 });
 
 function clearSearchResults() {
@@ -212,19 +228,18 @@ function renderSearchResults(matches, term) {
     return;
   }
 
-  matches.forEach(m => {
+  matches.forEach((m) => {
     const div = document.createElement("div");
     div.className = "transaction-item";
     div.style.cursor = "pointer";
 
-    const nameText = (m.firstName || m.lastName)
-      ? `${m.firstName || ""} ${m.lastName || ""}`.trim()
-      : "(senza nome)";
+    const nameText =
+      (m.firstName || m.lastName)
+        ? `${m.firstName || ""} ${m.lastName || ""}`.trim()
+        : "(senza nome)";
 
     div.innerHTML = `
-      <div>
-        <strong>${nameText}</strong>
-      </div>
+      <div><strong>${nameText}</strong></div>
       <div style="font-size:0.85rem; color:#555;">
         Tel: ${m.phone} — Punti: ${m.points}
       </div>
@@ -246,7 +261,7 @@ function renderSearchResults(matches, term) {
 }
 
 // ===============================
-// LOAD + REALTIME UPDATES
+// APERTURA CLIENTE + REALTIME
 // ===============================
 async function openClient(phone, forceCreate = false) {
   currentPhone = phone;
@@ -256,42 +271,55 @@ async function openClient(phone, forceCreate = false) {
 
   const docRef = doc(db, "clients", phone);
 
-  unsubscribeRealtime = onSnapshot(docRef, (snap) => {
-    if (snap.exists()) {
-      renderClient(phone, snap.data());
-    } else {
-      if (forceCreate) {
-        const data = {
-          firstName: "",
-          lastName: "",
-          notes: "",
-          points: 0,
-          createdAt: new Date()
-        };
-        setDoc(docRef, data);
-        renderClient(phone, data);
+  unsubscribeRealtime = onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        renderClient(phone, snap.data());
       } else {
-        showStatus("Cliente non trovato", true);
-        hideCard();
+        if (forceCreate) {
+          const data = {
+            firstName: "",
+            lastName: "",
+            notes: "",
+            points: 0,
+            createdAt: new Date()
+          };
+          setDoc(docRef, data);
+          renderClient(phone, data);
+        } else {
+          showStatus("Cliente non trovato", true);
+          hideCard();
+        }
       }
+    },
+    (err) => {
+      console.error(err);
+      showStatus("Errore nel caricamento cliente", true);
     }
-  });
+  );
 
   const transRef = collection(db, "clients", phone, "transactions");
   const qTrans = query(transRef, orderBy("timestamp", "desc"));
 
-  unsubscribeTransactions = onSnapshot(qTrans, (snap) => {
-    const arr = [];
-    snap.forEach(s => arr.push(s.data()));
-    renderTransactions(arr);
-  });
+  unsubscribeTransactions = onSnapshot(
+    qTrans,
+    (snap) => {
+      const arr = [];
+      snap.forEach((s) => arr.push(s.data()));
+      renderTransactions(arr);
+    },
+    (err) => {
+      console.error(err);
+      showStatus("Errore nel caricamento storico", true);
+    }
+  );
 
-  // ogni volta che apro un cliente, nascondo eventuali risultati di ricerca
   clearSearchResults();
 }
 
 // ===============================
-// RENDER CLIENT
+// RENDER CLIENTE
 // ===============================
 function renderClient(phone, data) {
   card.classList.remove("hidden");
@@ -303,22 +331,24 @@ function renderClient(phone, data) {
 }
 
 // ===============================
-// RENDER TRANSACTIONS
+// RENDER STORICO
 // ===============================
 function renderTransactions(arr) {
   transactionsList.innerHTML = "";
-  if (arr.length === 0) {
+  if (!arr.length) {
     transactionsList.innerHTML = "<em>Nessuna transazione</em>";
     return;
   }
 
-  arr.forEach(t => {
+  arr.forEach((t) => {
     const div = document.createElement("div");
     div.className = "transaction-item";
 
     const cls = t.delta >= 0 ? "t-positive" : "t-negative";
     const sign = t.delta >= 0 ? "+" : "";
-    const time = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleString() : "-";
+    const time = t.timestamp?.toDate
+      ? t.timestamp.toDate().toLocaleString()
+      : "-";
 
     div.innerHTML = `
       <div>
@@ -334,38 +364,49 @@ function renderTransactions(arr) {
 }
 
 // ===============================
-// SAVE BUTTON
+// SALVATAGGIO ANAGRAFICA
 // ===============================
-btnSave.addEventListener('click', async () => {
+btnSave.addEventListener("click", async () => {
   if (!currentPhone) return;
 
   const docRef = doc(db, "clients", currentPhone);
 
-  await setDoc(docRef, {
-    firstName: firstName.value,
-    lastName: lastName.value,
-    notes: notes.value,
-    updatedAt: new Date()
-  }, { merge: true });
-
-  showStatus("Salvato");
+  try {
+    await setDoc(
+      docRef,
+      {
+        firstName: firstName.value,
+        lastName: lastName.value,
+        notes: notes.value,
+        updatedAt: new Date()
+      },
+      { merge: true }
+    );
+    showStatus("Salvato");
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore nel salvataggio", true);
+  }
 });
 
 // ===============================
-// POINTS MANAGEMENT
+// GESTIONE PUNTI
 // ===============================
-document.querySelectorAll('.points-buttons button').forEach(btn => {
-  btn.addEventListener('click', () => changePoints(parseInt(btn.dataset.delta)));
+document.querySelectorAll(".points-buttons button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const delta = parseInt(btn.dataset.delta);
+    if (!isNaN(delta)) changePoints(delta);
+  });
 });
 
-btnAddManual.addEventListener('click', () => {
+btnAddManual.addEventListener("click", () => {
   const v = parseInt(manualDelta.value);
   if (!v) return;
   changePoints(v);
   manualDelta.value = "";
 });
 
-btnSubManual.addEventListener('click', () => {
+btnSubManual.addEventListener("click", () => {
   const v = parseInt(manualDelta.value);
   if (!v) return;
   changePoints(-v);
@@ -378,47 +419,63 @@ async function changePoints(delta) {
   const docRef = doc(db, "clients", currentPhone);
   const transCol = collection(docRef, "transactions");
 
-  const snap = await getDoc(docRef);
-  const oldValue = snap.exists() ? (snap.data().points || 0) : 0;
+  try {
+    const snap = await getDoc(docRef);
+    const oldValue = snap.exists() ? snap.data().points || 0 : 0;
 
-  let newValue = oldValue + delta;
-  if (newValue < 0) newValue = 0;
+    let newValue = oldValue + delta;
+    if (newValue < 0) newValue = 0;
 
-  await setDoc(docRef, { points: newValue, updatedAt: new Date() }, { merge: true });
+    await setDoc(
+      docRef,
+      { points: newValue, updatedAt: new Date() },
+      { merge: true }
+    );
 
-  await addDoc(transCol, {
-    delta: delta,
-    oldValue: oldValue,
-    newValue: newValue,
-    note: delta > 0 ? "Aggiunta punti" : "Rimozione punti",
-    timestamp: serverTimestamp()
-  });
+    await addDoc(transCol, {
+      delta: delta,
+      oldValue: oldValue,
+      newValue: newValue,
+      note: delta > 0 ? "Aggiunta punti" : "Rimozione punti",
+      timestamp: serverTimestamp()
+    });
 
-  showStatus(`Punti: ${oldValue} → ${newValue}`);
+    showStatus(`Punti: ${oldValue} → ${newValue}`);
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore durante la modifica punti", true);
+  }
 }
 
 // ===============================
-// WHATSAPP BUTTON
+// WHATSAPP
 // ===============================
-btnWhats.addEventListener('click', () => {
+btnWhats.addEventListener("click", () => {
   if (!currentPhone) return;
 
   const text = encodeURIComponent(`Ciao ${firstName.value || ""}!`);
   const sanitized = normalizePhone(currentPhone).replace(/\D/g, "");
 
+  if (!sanitized) return;
+
   window.open(`https://wa.me/${sanitized}?text=${text}`, "_blank");
 });
 
 // ===============================
-// DELETE CLIENT
+// ELIMINA CLIENTE
 // ===============================
-btnDelete.addEventListener('click', async () => {
+btnDelete.addEventListener("click", async () => {
   if (!currentPhone) return;
   if (!confirm("Eliminare cliente?")) return;
 
-  await deleteDoc(doc(db, "clients", currentPhone));
-  showStatus("Cliente eliminato");
-  hideCard();
+  try {
+    await deleteDoc(doc(db, "clients", currentPhone));
+    showStatus("Cliente eliminato");
+    hideCard();
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore nell'eliminazione", true);
+  }
 });
 
 function hideCard() {
