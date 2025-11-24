@@ -1,11 +1,10 @@
-
 // ===============================
 // Firebase SDK (CDN)
 // ===============================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
   getFirestore, doc, setDoc, getDoc, onSnapshot, deleteDoc,
-  collection, addDoc, serverTimestamp, query, orderBy
+  collection, addDoc, serverTimestamp, query, orderBy, getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
@@ -66,6 +65,12 @@ const btnSubManual = document.getElementById('btnSubManual');
 const status = document.getElementById('status');
 const transactionsList = document.getElementById('transactionsList');
 
+// Nuovi elementi per ricerca per nome
+const nameSearchInput = document.getElementById('nameSearchInput');
+const btnSearchName = document.getElementById('btnSearchName');
+const searchResults = document.getElementById('searchResults');
+const searchResultsList = document.getElementById('searchResultsList');
+
 let unsubscribeRealtime = null;
 let unsubscribeTransactions = null;
 let currentPhone = null;
@@ -123,6 +128,9 @@ onAuthStateChanged(auth, (user) => {
   } else {
     appSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
+    currentUserEmail.textContent = "";
+    hideCard();
+    clearSearchResults();
   }
 });
 
@@ -130,6 +138,7 @@ onAuthStateChanged(auth, (user) => {
 // STATUS MESSAGE
 // ===============================
 function showStatus(msg, isError = false) {
+  if (!status) return;
   status.textContent = msg;
   status.style.color = isError ? 'var(--danger)' : '#333';
   setTimeout(() => {
@@ -138,7 +147,7 @@ function showStatus(msg, isError = false) {
 }
 
 // ===============================
-// BUTTONS NEW / LOAD CLIENT
+// BUTTONS NEW / LOAD CLIENT (telefono)
 // ===============================
 btnNew.addEventListener('click', () => {
   const p = normalizePhone(phoneInput.value);
@@ -151,6 +160,90 @@ btnLoad.addEventListener('click', () => {
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, false);
 });
+
+// ===============================
+// SEARCH BY NAME / SURNAME
+// ===============================
+btnSearchName.addEventListener('click', async () => {
+  const term = nameSearchInput.value.trim().toLowerCase();
+  if (!term) {
+    clearSearchResults();
+    showStatus("Inserisci un nome o cognome da cercare", true);
+    return;
+  }
+
+  // Leggiamo tutti i clienti e filtriamo lato client (per un negozio va benissimo)
+  const snap = await getDocs(collection(db, "clients"));
+  const matches = [];
+  snap.forEach(docSnap => {
+    const data = docSnap.data();
+    const fn = (data.firstName || "").toLowerCase();
+    const ln = (data.lastName || "").toLowerCase();
+    const full = (fn + " " + ln).trim();
+
+    if (
+      fn.includes(term) ||
+      ln.includes(term) ||
+      full.includes(term)
+    ) {
+      matches.push({
+        phone: docSnap.id,
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        points: data.points || 0
+      });
+    }
+  });
+
+  renderSearchResults(matches, term);
+});
+
+function clearSearchResults() {
+  searchResults.classList.add("hidden");
+  searchResultsList.innerHTML = "";
+}
+
+function renderSearchResults(matches, term) {
+  searchResultsList.innerHTML = "";
+
+  if (!matches.length) {
+    searchResultsList.innerHTML = `<em>Nessun cliente trovato per "${term}"</em>`;
+    searchResults.classList.remove("hidden");
+    return;
+  }
+
+  matches.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "transaction-item";
+    div.style.cursor = "pointer";
+
+    const nameText = (m.firstName || m.lastName)
+      ? `${m.firstName || ""} ${m.lastName || ""}`.trim()
+      : "(senza nome)";
+
+    div.innerHTML = `
+      <div>
+        <strong>${nameText}</strong>
+      </div>
+      <div style="font-size:0.85rem; color:#555;">
+        Tel: ${m.phone} — Punti: ${m.points}
+      </div>
+      <div style="font-size:0.75rem; color:#777;">
+        Clicca per aprire la scheda cliente
+      </div>
+    `;
+
+    div.addEventListener("click", () => {
+      phoneInput.value = m.phone;
+      openClient(m.phone, false);
+      searchResults.classList.add("hidden");
+    });
+
+    searchResultsList.appendChild(div);
+  });
+
+  searchResults.classList.remove("hidden");
+}
 
 // ===============================
 // LOAD + REALTIME UPDATES
@@ -192,6 +285,9 @@ async function openClient(phone, forceCreate = false) {
     snap.forEach(s => arr.push(s.data()));
     renderTransactions(arr);
   });
+
+  // ogni volta che apro un cliente, nascondo eventuali risultati di ricerca
+  clearSearchResults();
 }
 
 // ===============================
