@@ -1,18 +1,11 @@
-// app.js (completo con storico)
+// SDK Firebase via CDN (corretto per browser)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
   getFirestore, doc, setDoc, getDoc, onSnapshot, deleteDoc,
   collection, addDoc, serverTimestamp, query, orderBy
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// La tua configurazione Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCctBq0nelD9HsjjmghFdSs6rN1vBA67Co",
   authDomain: "tessera-punti-pina.firebaseapp.com",
@@ -23,12 +16,11 @@ const firebaseConfig = {
   measurementId: "G-S2XMRXLMJ5"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);};
-
+// Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+// --- TUTTO IL RESTO DEL TUO CODICE È RIMASTO UGUALE ---
 
 // DOM
 const phoneInput = document.getElementById('phoneInput');
