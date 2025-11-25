@@ -79,6 +79,10 @@ const searchResultsList = document.getElementById("searchResultsList");
 let unsubscribeRealtime = null;
 let unsubscribeTransactions = null;
 let currentPhone = null;
+function clearSearchInputs() {
+  phoneInput.value = "";
+  nameSearchInput.value = "";
+}
 
 // ===============================
 // PHONE NORMALIZATION (+39)
