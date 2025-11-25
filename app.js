@@ -50,6 +50,7 @@ const btnLoad = document.getElementById("btnLoad");
 const btnNew = document.getElementById("btnNew");
 
 // Client card
+const btnResetAllPoints = document.getElementById("btnResetAllPoints");
 const card = document.getElementById("card");
 const phoneField = document.getElementById("phone");
 const firstName = document.getElementById("firstName");
