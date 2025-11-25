@@ -384,6 +384,30 @@ btnSave.addEventListener("click", async () => {
     showStatus("Errore nel salvataggio", true);
   }
 });
+// ===============================
+// AZZERA PUNTI PER TUTTI I CLIENTI
+// ===============================
+btnResetAllPoints.addEventListener("click", async () => {
+  if (!confirm("Sei sicura di voler AZZERARE i punti di TUTTI i clienti?")) return;
+
+  try {
+    const clientsSnap = await getDocs(collection(db, "clients"));
+    const updates = [];
+
+    clientsSnap.forEach((docSnap) => {
+      updates.push(
+        setDoc(docSnap.ref, { points: 0, updatedAt: new Date() }, { merge: true })
+      );
+    });
+
+    await Promise.all(updates);
+
+    showStatus("Punti azzerati per TUTTI i clienti");
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore durante l'azzeramento globale", true);
+  }
+});
 
 // ===============================
 // POINTS MANAGEMENT
