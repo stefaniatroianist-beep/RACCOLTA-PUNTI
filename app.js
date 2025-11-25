@@ -449,12 +449,27 @@ btnWhats.addEventListener("click", () => {
   if (!currentPhone) return;
 
   const text = encodeURIComponent(`Ciao ${firstName.value || ""}!`);
-  const sanitized = normalizePhone(currentPhone).replace(/\D/g, "");
-  if (!sanitized) return;
 
-  window.open(`https://wa.me/${sanitized}?text=${text}`, "_blank");
+  // Tolgo tutto tranne le cifre
+  let digits = (currentPhone || "").replace(/\D/g, "");
+
+  if (!digits) {
+    alert("Numero di telefono non valido");
+    return;
+  }
+
+  // Se è già nel formato italiano (393…), lo lascio così
+  if (digits.startsWith("39")) {
+    // OK, non aggiungo nulla
+  }
+  // Se inizia con 3 (es. 347…), aggiungo 39 davanti
+  else if (digits.startsWith("3")) {
+    digits = "39" + digits;
+  }
+
+  // Invio a WhatsApp (senza +)
+  window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
-
 // ===============================
 // DELETE CLIENT
 // ===============================
