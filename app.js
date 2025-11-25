@@ -273,16 +273,18 @@ async function openClient(phone, forceCreate = false) {
       if (snap.exists()) {
         renderClient(phone, snap.data());
       } else {
-        if (forceCreate) {
-          const data = {
-            firstName: "",
-            lastName: "",
-            notes: "",
-            points: 0,
-            createdAt: new Date()
-          };
-          setDoc(docRef, data);
-          renderClient(phone, data);
+       if (forceCreate) {
+  // NON creare subito il documento!
+  // Mostro solo la scheda vuota da compilare
+  renderClient(phone, {
+    firstName: "",
+    lastName: "",
+    notes: "",
+    points: 0
+  });
+  return;
+}
+
         } else {
           showStatus("Cliente non trovato", true);
           hideCard();
