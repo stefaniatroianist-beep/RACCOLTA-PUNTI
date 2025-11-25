@@ -87,7 +87,7 @@ function normalizePhone(p) {
   let digits = (p || "").replace(/\D/g, "");
   if (!digits) return "";
 
-  // If starts with "3" (es: 347...), add 39
+  // Se inizia con "3" (es: 347...), aggiungo 39
   if (digits.startsWith("3")) {
     digits = "39" + digits;
   }
@@ -277,27 +277,98 @@ async function openClient(phone, forceCreate = false) {
       } else {
         if (forceCreate) {
           // Nuovo cliente: mostro solo la scheda da compilare
-        function renderClient(phone, data) {
+          renderClient(phone, {
+            firstName: "",
+            lastName: "",
+            notes: "",
+            points: 0
+          });
+        } else {
+          showStatus("Cliente non trovato", true);
+          hideCard();
+        }
+      }
+    },
+    (err) => {
+      console.error(err);
+      showStatus("Errore nel caricamento cliente", true);
+    }
+  );
+
+  // Storico transazioni in tempo reale
+  const transRef = collection(db, "clients", phone, "transactions");
+  const qTrans = query(transRef, orderBy("timestamp", "desc"));
+
+  unsubscribeTransactions = onSnapshot(
+    qTrans,
+    (snap) => {
+      const arr = [];
+      snap.forEach((s) => arr.push(s.data()));
+      renderTransactions(arr);
+    },
+    (err) => {
+      console.error(err);
+      showStatus("Errore nel caricamento storico", true);
+    }
+  );
+
+  clearSearchResults();
+}
+
+// ===============================
+// RENDER CLIENT
+// ===============================
+function renderClient(phone, data) {
   card.classList.remove("hidden");
   phoneField.value = phone;
 
-  // Se il campo esiste nel documento Firestore, lo uso sempre
-  // Se NON esiste, lascio quello che c'è già a schermo
-
+  // Se il campo esiste nel documento Firestore, lo uso.
+  // Se NON esiste, lascio ciò che c'è già a schermo (es. scritto da te prima del salvataggio)
   if ("firstName" in data) {
     firstName.value = data.firstName || "";
   }
-
   if ("lastName" in data) {
     lastName.value = data.lastName || "";
   }
-
   if ("notes" in data) {
     notes.value = data.notes || "";
   }
 
   // I punti li aggiorniamo sempre
   pointsValue.textContent = data.points || 0;
+}
+
+// ===============================
+// RENDER TRANSACTIONS
+// ===============================
+function renderTransactions(arr) {
+  transactionsList.innerHTML = "";
+  if (!arr.length) {
+    transactionsList.innerHTML = "<em>Nessuna transazione</em>";
+    return;
+  }
+
+  arr.forEach((t) => {
+    const div = document.createElement("div");
+    div.className = "transaction-item";
+
+    const cls = t.delta >= 0 ? "t-positive" : "t-negative";
+    const sign = t.delta >= 0 ? "+" : "";
+    const time = t.timestamp?.toDate
+      ? t.timestamp.toDate().toLocaleString()
+      : "-";
+
+    div.innerHTML = `
+      <div>
+        <span class="${cls}">${sign}${t.delta}</span>
+        <span style="font-size:0.8rem;color:#666">(da ${t.oldValue} a ${t.newValue})</span>
+      </div>
+      <div style="font-size:0.8rem;color:#777">${time}</div>
+      ${t.note ? `<div style="font-size:0.8rem;color:#555">${t.note}</div>` : ""}
+    `;
+
+    transactionsList.appendChild(div);
+  });
 }
 
 // ===============================
@@ -402,7 +473,7 @@ btnWhats.addEventListener("click", () => {
 
   // Se è già nel formato italiano (393…), lo lascio così
   if (digits.startsWith("39")) {
-    // OK, non aggiungo nulla
+    // OK
   }
   // Se inizia con 3 (es. 347…), aggiungo 39 davanti
   else if (digits.startsWith("3")) {
