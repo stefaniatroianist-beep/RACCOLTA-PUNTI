@@ -384,30 +384,6 @@ btnSave.addEventListener("click", async () => {
     showStatus("Errore nel salvataggio", true);
   }
 });
-// ===============================
-// AZZERA PUNTI PER TUTTI I CLIENTI
-// ===============================
-btnResetAllPoints.addEventListener("click", async () => {
-  if (!confirm("Sei sicura di voler AZZERARE i punti di TUTTI i clienti?")) return;
-
-  try {
-    const clientsSnap = await getDocs(collection(db, "clients"));
-    const updates = [];
-
-    clientsSnap.forEach((docSnap) => {
-      updates.push(
-        setDoc(docSnap.ref, { points: 0, updatedAt: new Date() }, { merge: true })
-      );
-    });
-
-    await Promise.all(updates);
-
-    showStatus("Punti azzerati per TUTTI i clienti");
-  } catch (err) {
-    console.error(err);
-    showStatus("Errore durante l'azzeramento globale", true);
-  }
-});
 
 // ===============================
 // POINTS MANAGEMENT
@@ -495,6 +471,7 @@ btnWhats.addEventListener("click", () => {
   // Invio a WhatsApp (senza +)
   window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
+
 // ===============================
 // DELETE CLIENT
 // ===============================
@@ -518,4 +495,52 @@ function hideCard() {
   if (unsubscribeRealtime) unsubscribeRealtime();
   if (unsubscribeTransactions) unsubscribeTransactions();
 }
+
+// ===============================
+// RESET ALL POINTS FOR ALL CLIENTS (with storico)
+// ===============================
+btnResetAllPoints.addEventListener("click", async () => {
+  if (!confirm("Sei sicura di voler AZZERARE i punti di TUTTI i clienti?")) return;
+
+  try {
+    const clientsSnap = await getDocs(collection(db, "clients"));
+    const operations = [];
+
+    clientsSnap.forEach((docSnap) => {
+      const ref = docSnap.ref;
+      const data = docSnap.data() || {};
+      const oldPoints = data.points || 0;
+      const newPoints = 0;
+
+      // 1️⃣ aggiorna i punti a 0
+      operations.push(
+        setDoc(
+          ref,
+          { points: newPoints, updatedAt: new Date() },
+          { merge: true }
+        )
+      );
+
+      // 2️⃣ aggiunge una transazione nello storico se aveva punti
+      if (oldPoints !== 0) {
+        const transRef = collection(ref, "transactions");
+        operations.push(
+          addDoc(transRef, {
+            delta: newPoints - oldPoints,   // es: da 100 a 0 -> -100
+            oldValue: oldPoints,
+            newValue: newPoints,
+            note: "Azzeramento totale punti",
+            timestamp: serverTimestamp()
+          })
+        );
+      }
+    });
+
+    await Promise.all(operations);
+    showStatus("Punti azzerati per TUTTI i clienti (storico aggiornato)");
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore durante l'azzeramento globale", true);
+  }
+});
 
