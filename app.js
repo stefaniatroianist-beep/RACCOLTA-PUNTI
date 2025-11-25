@@ -390,7 +390,15 @@ btnSave.addEventListener("click", async () => {
       },
       { merge: true }
     );
+
     showStatus("Salvato");
+
+    // 🔹 Dopo il salvataggio pulisco i campi di ricerca
+    phoneInput.value = "";
+    if (nameSearchInput) {
+      nameSearchInput.value = "";
+    }
+
   } catch (err) {
     console.error(err);
     showStatus("Errore nel salvataggio", true);
