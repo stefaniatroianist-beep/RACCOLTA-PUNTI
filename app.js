@@ -79,9 +79,18 @@ const searchResultsList = document.getElementById("searchResultsList");
 let unsubscribeRealtime = null;
 let unsubscribeTransactions = null;
 let currentPhone = null;
+
+// ===============================
+// Utility: pulizia campi ricerca
+// ===============================
 function clearSearchInputs() {
-  phoneInput.value = "";
-  nameSearchInput.value = "";
+  if (phoneInput) phoneInput.value = "";
+  if (nameSearchInput) nameSearchInput.value = "";
+}
+
+function clearSearchResults() {
+  if (searchResults) searchResults.classList.add("hidden");
+  if (searchResultsList) searchResultsList.innerHTML = "";
 }
 
 // ===============================
@@ -142,6 +151,7 @@ onAuthStateChanged(auth, (user) => {
     loginStatus.textContent = "";
     hideCard();
     clearSearchResults();
+    clearSearchInputs();
   }
 });
 
@@ -164,12 +174,20 @@ btnNew.addEventListener("click", () => {
   const p = normalizePhone(phoneInput.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, true);
+
+  // dopo aver aperto il nuovo cliente, svuoto i campi ricerca
+  clearSearchInputs();
+  clearSearchResults();
 });
 
 btnLoad.addEventListener("click", () => {
   const p = normalizePhone(phoneInput.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, false);
+
+  // dopo aver aperto la scheda, svuoto i campi ricerca
+  clearSearchInputs();
+  clearSearchResults();
 });
 
 // ===============================
@@ -214,11 +232,6 @@ btnSearchName.addEventListener("click", async () => {
   }
 });
 
-function clearSearchResults() {
-  searchResults.classList.add("hidden");
-  searchResultsList.innerHTML = "";
-}
-
 function renderSearchResults(matches, term) {
   searchResultsList.innerHTML = "";
 
@@ -249,8 +262,13 @@ function renderSearchResults(matches, term) {
     `;
 
     div.addEventListener("click", () => {
-      phoneInput.value = m.phone;
+      // apro la scheda cliente
       openClient(m.phone, false);
+
+      // pulisco campi di ricerca (telefono + nome/cognome)
+      clearSearchInputs();
+
+      // nascondo la lista risultati
       searchResults.classList.add("hidden");
     });
 
@@ -315,8 +333,6 @@ async function openClient(phone, forceCreate = false) {
       showStatus("Errore nel caricamento storico", true);
     }
   );
-
-  clearSearchResults();
 }
 
 // ===============================
@@ -326,8 +342,6 @@ function renderClient(phone, data) {
   card.classList.remove("hidden");
   phoneField.value = phone;
 
-  // Se il campo esiste nel documento Firestore, lo uso.
-  // Se NON esiste, lascio ciò che c'è già a schermo (es. scritto da te prima del salvataggio)
   if ("firstName" in data) {
     firstName.value = data.firstName || "";
   }
@@ -338,7 +352,6 @@ function renderClient(phone, data) {
     notes.value = data.notes || "";
   }
 
-  // I punti li aggiorniamo sempre
   pointsValue.textContent = data.points || 0;
 }
 
@@ -397,11 +410,9 @@ btnSave.addEventListener("click", async () => {
 
     showStatus("Salvato");
 
-    // 🔹 Dopo il salvataggio pulisco i campi di ricerca
-    phoneInput.value = "";
-    if (nameSearchInput) {
-      nameSearchInput.value = "";
-    }
+    // dopo il salvataggio pulisco i campi di ricerca + risultati
+    clearSearchInputs();
+    clearSearchResults();
 
   } catch (err) {
     console.error(err);
@@ -449,14 +460,14 @@ async function changePoints(delta) {
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
 
-    // 1️⃣ aggiorno i punti nel cliente
+    // aggiorno i punti nel cliente
     await setDoc(
       docRef,
       { points: newValue, updatedAt: new Date() },
       { merge: true }
     );
 
-    // 2️⃣ salvo nello storico
+    // salvo nello storico
     await addDoc(transCol, {
       delta: delta,
       oldValue: oldValue,
@@ -467,7 +478,7 @@ async function changePoints(delta) {
 
     showStatus(`Punti: ${oldValue} → ${newValue}`);
 
-    // 3️⃣ prepara testo WhatsApp
+    // prepara testo WhatsApp
     const now = new Date();
     const expiry = new Date(now);
     expiry.setFullYear(expiry.getFullYear() + 1);   // scadenza tra 1 anno
@@ -479,20 +490,16 @@ async function changePoints(delta) {
       `I tuoi punti scadono il ${expiryText}.`
     );
 
-    // 4️⃣ prendo solo le cifre dal numero (niente +, spazi, ecc.)
+    // prendo solo le cifre dal numero (niente +, spazi, ecc.)
     let digits = (currentPhone || "").replace(/\D/g, "");
 
     if (digits) {
-      // Se è già nel formato 39..., lo lascio così
       if (digits.startsWith("39")) {
         // ok
-      }
-      // Se inizia con 3 (347...), aggiungo 39 davanti
-      else if (digits.startsWith("3")) {
+      } else if (digits.startsWith("3")) {
         digits = "39" + digits;
       }
 
-      // 5️⃣ apro WhatsApp (senza +)
       window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
     }
 
@@ -577,7 +584,6 @@ btnResetAllPoints.addEventListener("click", async () => {
       const oldPoints = data.points || 0;
       const newPoints = 0;
 
-      // 1️⃣ aggiorna i punti a 0
       operations.push(
         setDoc(
           ref,
@@ -586,12 +592,11 @@ btnResetAllPoints.addEventListener("click", async () => {
         )
       );
 
-      // 2️⃣ aggiunge una transazione nello storico se aveva punti
       if (oldPoints !== 0) {
         const transRef = collection(ref, "transactions");
         operations.push(
           addDoc(transRef, {
-            delta: newPoints - oldPoints,   // es: da 100 a 0 -> -100
+            delta: newPoints - oldPoints,
             oldValue: oldPoints,
             newValue: newPoints,
             note: "Azzeramento totale punti",
@@ -608,4 +613,3 @@ btnResetAllPoints.addEventListener("click", async () => {
     showStatus("Errore durante l'azzeramento globale", true);
   }
 });
-
