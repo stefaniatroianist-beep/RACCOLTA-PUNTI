@@ -267,16 +267,16 @@ async function openClient(phone, forceCreate = false) {
 
   const docRef = doc(db, "clients", phone);
 
+  // Ascolto in tempo reale i dati del cliente
   unsubscribeRealtime = onSnapshot(
     docRef,
     (snap) => {
       if (snap.exists()) {
-        // Documento già creato: uso i dati del DB
+        // Documento già esistente: uso i dati del DB
         renderClient(phone, snap.data());
       } else {
         if (forceCreate) {
-          // Nuovo cliente: MOSTRO solo la scheda vuota,
-          // ma NON scrivo ancora niente su Firestore
+          // Nuovo cliente: mostro solo la scheda da compilare
           renderClient(phone, {
             firstName: "",
             lastName: "",
@@ -295,6 +295,7 @@ async function openClient(phone, forceCreate = false) {
     }
   );
 
+  // Storico transazioni in tempo reale
   const transRef = collection(db, "clients", phone, "transactions");
   const qTrans = query(transRef, orderBy("timestamp", "desc"));
 
@@ -312,59 +313,6 @@ async function openClient(phone, forceCreate = false) {
   );
 
   clearSearchResults();
-}
-
-function renderClient(phone, data) {
-  card.classList.remove("hidden");
-  phoneField.value = phone;
-
-  // NON sovrascrivere ciò che hai già scritto a mano
-  // Se il campo è vuoto, lo riempio con ciò che arriva dal DB
-  if (!firstName.value && "firstName" in data) {
-    firstName.value = data.firstName || "";
-  }
-  if (!lastName.value && "lastName" in data) {
-    lastName.value = data.lastName || "";
-  }
-  if (!notes.value && "notes" in data) {
-    notes.value = data.notes || "";
-  }
-
-  // I punti li aggiorniamo sempre
-  pointsValue.textContent = data.points || 0;
-}
-
-// ===============================
-// RENDER TRANSACTIONS
-// ===============================
-function renderTransactions(arr) {
-  transactionsList.innerHTML = "";
-  if (!arr.length) {
-    transactionsList.innerHTML = "<em>Nessuna transazione</em>";
-    return;
-  }
-
-  arr.forEach((t) => {
-    const div = document.createElement("div");
-    div.className = "transaction-item";
-
-    const cls = t.delta >= 0 ? "t-positive" : "t-negative";
-    const sign = t.delta >= 0 ? "+" : "";
-    const time = t.timestamp?.toDate
-      ? t.timestamp.toDate().toLocaleString()
-      : "-";
-
-    div.innerHTML = `
-      <div>
-        <span class="${cls}">${sign}${t.delta}</span>
-        <span style="font-size:0.8rem;color:#666">(da ${t.oldValue} a ${t.newValue})</span>
-      </div>
-      <div style="font-size:0.8rem;color:#777">${time}</div>
-      ${t.note ? `<div style="font-size:0.8rem;color:#555">${t.note}</div>` : ""}
-    `;
-
-    transactionsList.appendChild(div);
-  });
 }
 
 // ===============================
