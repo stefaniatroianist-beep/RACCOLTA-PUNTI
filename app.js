@@ -277,42 +277,27 @@ async function openClient(phone, forceCreate = false) {
       } else {
         if (forceCreate) {
           // Nuovo cliente: mostro solo la scheda da compilare
-          renderClient(phone, {
-            firstName: "",
-            lastName: "",
-            notes: "",
-            points: 0
-          });
-        } else {
-          showStatus("Cliente non trovato", true);
-          hideCard();
-        }
-      }
-    },
-    (err) => {
-      console.error(err);
-      showStatus("Errore nel caricamento cliente", true);
-    }
-  );
+        function renderClient(phone, data) {
+  card.classList.remove("hidden");
+  phoneField.value = phone;
 
-  // Storico transazioni in tempo reale
-  const transRef = collection(db, "clients", phone, "transactions");
-  const qTrans = query(transRef, orderBy("timestamp", "desc"));
+  // Se il campo esiste nel documento Firestore, lo uso sempre
+  // Se NON esiste, lascio quello che c'è già a schermo
 
-  unsubscribeTransactions = onSnapshot(
-    qTrans,
-    (snap) => {
-      const arr = [];
-      snap.forEach((s) => arr.push(s.data()));
-      renderTransactions(arr);
-    },
-    (err) => {
-      console.error(err);
-      showStatus("Errore nel caricamento storico", true);
-    }
-  );
+  if ("firstName" in data) {
+    firstName.value = data.firstName || "";
+  }
 
-  clearSearchResults();
+  if ("lastName" in data) {
+    lastName.value = data.lastName || "";
+  }
+
+  if ("notes" in data) {
+    notes.value = data.notes || "";
+  }
+
+  // I punti li aggiorniamo sempre
+  pointsValue.textContent = data.points || 0;
 }
 
 // ===============================
