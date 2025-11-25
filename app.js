@@ -271,20 +271,18 @@ async function openClient(phone, forceCreate = false) {
     docRef,
     (snap) => {
       if (snap.exists()) {
+        // Documento già creato: uso i dati del DB
         renderClient(phone, snap.data());
       } else {
-       if (forceCreate) {
-  // NON creare subito il documento!
-  // Mostro solo la scheda vuota da compilare
-  renderClient(phone, {
-    firstName: "",
-    lastName: "",
-    notes: "",
-    points: 0
-  });
-  return;
-}
-
+        if (forceCreate) {
+          // Nuovo cliente: MOSTRO solo la scheda vuota,
+          // ma NON scrivo ancora niente su Firestore
+          renderClient(phone, {
+            firstName: "",
+            lastName: "",
+            notes: "",
+            points: 0
+          });
         } else {
           showStatus("Cliente non trovato", true);
           hideCard();
@@ -316,15 +314,23 @@ async function openClient(phone, forceCreate = false) {
   clearSearchResults();
 }
 
-// ===============================
-// RENDER CLIENT
-// ===============================
 function renderClient(phone, data) {
   card.classList.remove("hidden");
   phoneField.value = phone;
-  firstName.value = data.firstName || "";
-  lastName.value = data.lastName || "";
-  notes.value = data.notes || "";
+
+  // NON sovrascrivere ciò che hai già scritto a mano
+  // Se il campo è vuoto, lo riempio con ciò che arriva dal DB
+  if (!firstName.value && "firstName" in data) {
+    firstName.value = data.firstName || "";
+  }
+  if (!lastName.value && "lastName" in data) {
+    lastName.value = data.lastName || "";
+  }
+  if (!notes.value && "notes" in data) {
+    notes.value = data.notes || "";
+  }
+
+  // I punti li aggiorniamo sempre
   pointsValue.textContent = data.points || 0;
 }
 
