@@ -421,6 +421,9 @@ btnSubManual.addEventListener("click", () => {
   manualDelta.value = "";
 });
 
+// ===============================
+// CHANGE POINTS + WHATSAPP AUTO
+// ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
 
@@ -434,12 +437,14 @@ async function changePoints(delta) {
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
 
+    // 1️⃣ aggiorno i punti nel cliente
     await setDoc(
       docRef,
       { points: newValue, updatedAt: new Date() },
       { merge: true }
     );
 
+    // 2️⃣ salvo nello storico
     await addDoc(transCol, {
       delta: delta,
       oldValue: oldValue,
@@ -449,6 +454,36 @@ async function changePoints(delta) {
     });
 
     showStatus(`Punti: ${oldValue} → ${newValue}`);
+
+    // 3️⃣ prepara testo WhatsApp
+    const now = new Date();
+    const expiry = new Date(now);
+    expiry.setFullYear(expiry.getFullYear() + 1);   // scadenza tra 1 anno
+    const expiryText = expiry.toLocaleDateString("it-IT");
+
+    const text = encodeURIComponent(
+      `Ciao ${firstName.value || ""}!\n` +
+      `Il tuo saldo punti aggiornato è ${newValue}.\n` +
+      `I tuoi punti scadono il ${expiryText}.`
+    );
+
+    // 4️⃣ prendo solo le cifre dal numero (niente +, spazi, ecc.)
+    let digits = (currentPhone || "").replace(/\D/g, "");
+
+    if (digits) {
+      // Se è già nel formato 39..., lo lascio così
+      if (digits.startsWith("39")) {
+        // ok
+      }
+      // Se inizia con 3 (347...), aggiungo 39 davanti
+      else if (digits.startsWith("3")) {
+        digits = "39" + digits;
+      }
+
+      // 5️⃣ apro WhatsApp (senza +)
+      window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
+    }
+
   } catch (err) {
     console.error(err);
     showStatus("Errore durante la modifica punti", true);
@@ -456,14 +491,24 @@ async function changePoints(delta) {
 }
 
 // ===============================
-// WHATSAPP
+// WHATSAPP (invio manuale)
 // ===============================
 btnWhats.addEventListener("click", () => {
   if (!currentPhone) return;
 
-  const text = encodeURIComponent(`Ciao ${firstName.value || ""}!`);
+  const punti = pointsValue.textContent || "0";
 
-  // Tolgo tutto tranne le cifre
+  const now = new Date();
+  const expiry = new Date(now);
+  expiry.setFullYear(expiry.getFullYear() + 1);
+  const expiryText = expiry.toLocaleDateString("it-IT");
+
+  const text = encodeURIComponent(
+    `Ciao ${firstName.value || ""}!\n` +
+    `Il tuo saldo punti aggiornato è ${punti}.\n` +
+    `I tuoi punti scadono il ${expiryText}.`
+  );
+
   let digits = (currentPhone || "").replace(/\D/g, "");
 
   if (!digits) {
@@ -471,16 +516,12 @@ btnWhats.addEventListener("click", () => {
     return;
   }
 
-  // Se è già nel formato italiano (393…), lo lascio così
   if (digits.startsWith("39")) {
-    // OK
-  }
-  // Se inizia con 3 (es. 347…), aggiungo 39 davanti
-  else if (digits.startsWith("3")) {
+    // già ok
+  } else if (digits.startsWith("3")) {
     digits = "39" + digits;
   }
 
-  // Invio a WhatsApp (senza +)
   window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
 
