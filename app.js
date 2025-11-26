@@ -599,43 +599,62 @@ btnExportCsv.addEventListener("click", async () => {
 });
 
 // ===============================
-// ESPORTA CONTATTI PER TELEFONO (VCF)
+// ESPORTA CONTATTI IN VCF (per rubrica / WhatsApp)
 // ===============================
 btnExportVcf.addEventListener("click", async () => {
   try {
     showStatus("Preparazione file contatti in corso...");
 
     const snap = await getDocs(collection(db, "clients"));
-
-    if (snap.empty) {
-      showStatus("Nessun cliente da esportare come contatto", true);
-      return;
-    }
-
-    const lines = [];
+    const cards = [];
 
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
-      const idPhone = docSnap.id || "";
 
-      let phone = idPhone.toString().trim();
-      if (!phone.startsWith("+")) {
-        phone = phone.replace(/[^\d]/g, "");
+      // telefono = id del documento
+      let phone = (docSnap.id || "").toString();
+
+      // tolgo tutto tranne cifre
+      let digits = phone.replace(/\D/g, "");
+
+      // se non c'è numero valido, salto
+      if (!digits) return;
+
+      // se inizia con 3 (es. 347...), aggiungo prefisso 39
+      if (digits.startsWith("3")) {
+        digits = "39" + digits;
       }
 
-      const first = (data.firstName || "").toString().trim();
-      const last  = (data.lastName  || "").toString().trim();
-      const fullName = (first + " " + last).trim() || phone;
+      // alla fine il numero nel VCF va con il +
+      const fullNumber = "+" + digits;
 
-      lines.push("BEGIN:VCARD");
-      lines.push("VERSION:3.0");
-      lines.push(`N:${last};${first};;;`);
-      lines.push(`FN:${fullName}`);
-      lines.push(`TEL;TYPE=CELL:${phone}`);
-      lines.push("END:VCARD");
+      const firstName = (data.firstName || "").toString().trim();
+      const lastName  = (data.lastName  || "").toString().trim();
+
+      let displayName = `${firstName} ${lastName}`.trim();
+      if (!displayName) {
+        displayName = fullNumber;
+      }
+
+      // Nome nel contatto: puoi personalizzare come vuoi
+      const vcardName = `Pina & Co - ${displayName}`;
+
+      const vcard =
+        "BEGIN:VCARD\r\n" +
+        "VERSION:3.0\r\n" +
+        `FN:${vcardName}\r\n` +
+        `TEL;TYPE=CELL:${fullNumber}\r\n` +
+        "END:VCARD\r\n";
+
+      cards.push(vcard);
     });
 
-    const vcfContent = lines.join("\r\n");
+    if (!cards.length) {
+      showStatus("Nessun contatto da esportare", true);
+      return;
+    }
+
+    const vcfContent = cards.join("\r\n");
     const blob = new Blob([vcfContent], { type: "text/vcard;charset=utf-8;" });
 
     const now = new Date();
@@ -653,13 +672,14 @@ btnExportVcf.addEventListener("click", async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showStatus("File contatti VCF scaricato. Importalo dal telefono per creare/aggiornare la rubrica.");
+    showStatus("File contatti VCF scaricato");
 
   } catch (err) {
     console.error(err);
-    showStatus("Errore durante l'esportazione contatti (VCF)", true);
+    showStatus("Errore durante l'esportazione VCF", true);
   }
 });
+
 // ===============================
 // DELETE CLIENT (cliente + storico punti)
 // ===============================
