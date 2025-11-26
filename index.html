@@ -46,12 +46,24 @@
           <button id="btnLogout" class="danger">🔒 Esci</button>
         </div>
       </div>
+
+      <!-- ============================ -->
       <!-- OPERAZIONI GLOBALI -->
+      <!-- (agiscono su TUTTI i clienti) -->
+      <!-- ============================ -->
       <section class="card">
         <h3>Operazioni globali</h3>
-        <button id="btnResetAllPoints" class="danger">
-          🧹 Azzera punti per TUTTI i clienti
-        </button>
+        <p class="status" style="margin-bottom: 0.5rem;">
+          Questi pulsanti agiscono su <strong>tutti</strong> i clienti. Usali con attenzione.
+        </p>
+        <div class="actions" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+          <button id="btnExportCsv">
+            📥 Backup clienti (CSV)
+          </button>
+          <button id="btnResetAllPoints" class="danger">
+            🧹 Azzera punti per TUTTI i clienti
+          </button>
+        </div>
       </section>
 
       <!-- ============================ -->
@@ -134,6 +146,7 @@
         <h3>Storico transazioni</h3>
         <div id="transactionsList" class="transactions"></div>
 
+        <!-- Pulsanti normali scheda cliente -->
         <div class="actions">
           <button id="btnSave">💾 Salva</button>
           <button id="btnWhats">💬 WhatsApp</button>
@@ -155,4 +168,3 @@
   <script type="module" src="app.js"></script>
 </body>
 </html>
-
