@@ -48,4 +48,20 @@ footer{margin-top:18px;color:#666;font-size:0.8rem}
   padding-top: 15px;
   border-top: 2px solid #ff8888;
 }
+.danger-zone {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 2px solid #ff8888;
+}
+
+.warning {
+  background-color: #ffd76b !important;
+  color: #333 !important;
+}
+
+.danger-zone button {
+  margin: 10px 0;
+  width: 100%;
+  font-weight: bold;
+}
 
