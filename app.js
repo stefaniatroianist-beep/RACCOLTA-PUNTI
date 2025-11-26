@@ -661,30 +661,30 @@ btnExportVcf.addEventListener("click", async () => {
   }
 });
 // ===============================
-// DELETE CLIENT (con cancellazione storico)
+// DELETE CLIENT (cliente + storico punti)
 // ===============================
 btnDelete.addEventListener("click", async () => {
   if (!currentPhone) return;
-  if (!confirm("Eliminare cliente e TUTTO lo storico punti?")) return;
+  if (!confirm("Eliminare questo cliente e TUTTO lo storico punti?")) return;
 
   try {
+    // riferimento al documento cliente
     const clientRef = doc(db, "clients", currentPhone);
-    const transRef = collection(clientRef, "transactions");
 
-    // 1️⃣ leggo tutte le transazioni del cliente
+    // 1️⃣ cancello tutte le transazioni nella sottocollezione "transactions"
+    const transRef = collection(db, "clients", currentPhone, "transactions");
     const transSnap = await getDocs(transRef);
 
-    const operations = [];
+    const ops = [];
 
-    // 2️⃣ preparo le cancellazioni di tutte le transazioni
     transSnap.forEach((docSnap) => {
-      operations.push(deleteDoc(docSnap.ref));
+      ops.push(deleteDoc(docSnap.ref));
     });
 
-    // 3️⃣ eseguo le cancellazioni dello storico
-    await Promise.all(operations);
+    // eseguo le cancellazioni delle transazioni
+    await Promise.all(ops);
 
-    // 4️⃣ cancello il documento principale del cliente
+    // 2️⃣ ora cancello il documento principale del cliente
     await deleteDoc(clientRef);
 
     showStatus("Cliente e storico punti eliminati");
@@ -697,7 +697,6 @@ btnDelete.addEventListener("click", async () => {
     showStatus("Errore nell'eliminazione completa", true);
   }
 });
-
 
 function hideCard() {
   card.classList.add("hidden");
