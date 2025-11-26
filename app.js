@@ -555,18 +555,23 @@ btnExportCsv.addEventListener("click", async () => {
     const snap = await getDocs(collection(db, "clients"));
     const rows = [];
 
+    if (snap.empty) {
+      showStatus("Nessun cliente da esportare", true);
+      return;
+    }
+
     // intestazione CSV
     rows.push("phone;firstName;lastName;notes;points");
 
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
       const phone = docSnap.id || "";
-      const firstName = (data.firstName || "").toString().replace(/[\r\n;]/g, " ");
-      const lastName  = (data.lastName  || "").toString().replace(/[\r\n;]/g, " ");
-      const notes     = (data.notes     || "").toString().replace(/[\r\n;]/g, " ");
-      const points    = (data.points != null ? data.points : 0);
+      const fn = (data.firstName || "").toString().replace(/[\r\n;]/g, " ");
+      const ln = (data.lastName  || "").toString().replace(/[\r\n;]/g, " ");
+      const nt = (data.notes     || "").toString().replace(/[\r\n;]/g, " ");
+      const pts = (data.points != null ? data.points : 0);
 
-      rows.push(`${phone};${firstName};${lastName};${notes};${points}`);
+      rows.push(`${phone};${fn};${ln};${nt};${pts}`);
     });
 
     // 2️⃣ Creo il contenuto CSV
@@ -590,7 +595,9 @@ btnExportCsv.addEventListener("click", async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showStatus("Backup CSV scaricato");
+    // 5️⃣ Messaggio chiaro
+    const count = rows.length - 1; // tolgo la riga di intestazione
+    showStatus(`Backup CSV scaricato (${count} clienti). Controlla la cartella Download del browser.`);
 
   } catch (err) {
     console.error(err);
