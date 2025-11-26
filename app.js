@@ -660,23 +660,44 @@ btnExportVcf.addEventListener("click", async () => {
     showStatus("Errore durante l'esportazione contatti (VCF)", true);
   }
 });
-
 // ===============================
-// DELETE CLIENT
+// DELETE CLIENT (con cancellazione storico)
 // ===============================
 btnDelete.addEventListener("click", async () => {
   if (!currentPhone) return;
-  if (!confirm("Eliminare cliente?")) return;
+  if (!confirm("Eliminare cliente e TUTTO lo storico punti?")) return;
 
   try {
-    await deleteDoc(doc(db, "clients", currentPhone));
-    showStatus("Cliente eliminato");
+    const clientRef = doc(db, "clients", currentPhone);
+    const transRef = collection(clientRef, "transactions");
+
+    // 1️⃣ leggo tutte le transazioni del cliente
+    const transSnap = await getDocs(transRef);
+
+    const operations = [];
+
+    // 2️⃣ preparo le cancellazioni di tutte le transazioni
+    transSnap.forEach((docSnap) => {
+      operations.push(deleteDoc(docSnap.ref));
+    });
+
+    // 3️⃣ eseguo le cancellazioni dello storico
+    await Promise.all(operations);
+
+    // 4️⃣ cancello il documento principale del cliente
+    await deleteDoc(clientRef);
+
+    showStatus("Cliente e storico punti eliminati");
     hideCard();
+    clearSearchInputs();
+    clearSearchResults();
+
   } catch (err) {
     console.error(err);
-    showStatus("Errore nell'eliminazione", true);
+    showStatus("Errore nell'eliminazione completa", true);
   }
 });
+
 
 function hideCard() {
   card.classList.add("hidden");
