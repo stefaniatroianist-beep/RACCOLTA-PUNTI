@@ -62,6 +62,7 @@ const btnSave = document.getElementById("btnSave");
 const btnWhats = document.getElementById("btnWhats");
 const btnDelete = document.getElementById("btnDelete");
 const btnExportCsv = document.getElementById("btnExportCsv");
+const btnExportVcf = document.getElementById("btnExportVcf");
 
 const manualDelta = document.getElementById("manualDelta");
 const btnAddManual = document.getElementById("btnAddManual");
@@ -176,7 +177,6 @@ btnNew.addEventListener("click", () => {
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, true);
 
-  // dopo aver aperto il nuovo cliente, svuoto i campi ricerca
   clearSearchInputs();
   clearSearchResults();
 });
@@ -186,7 +186,6 @@ btnLoad.addEventListener("click", () => {
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, false);
 
-  // dopo aver aperto la scheda, svuoto i campi ricerca
   clearSearchInputs();
   clearSearchResults();
 });
@@ -263,13 +262,8 @@ function renderSearchResults(matches, term) {
     `;
 
     div.addEventListener("click", () => {
-      // apro la scheda cliente
       openClient(m.phone, false);
-
-      // pulisco campi di ricerca (telefono + nome/cognome)
       clearSearchInputs();
-
-      // nascondo la lista risultati
       searchResults.classList.add("hidden");
     });
 
@@ -290,16 +284,13 @@ async function openClient(phone, forceCreate = false) {
 
   const docRef = doc(db, "clients", phone);
 
-  // Ascolto in tempo reale i dati del cliente
   unsubscribeRealtime = onSnapshot(
     docRef,
     (snap) => {
       if (snap.exists()) {
-        // Documento già esistente: uso i dati del DB
         renderClient(phone, snap.data());
       } else {
         if (forceCreate) {
-          // Nuovo cliente: mostro solo la scheda da compilare
           renderClient(phone, {
             firstName: "",
             lastName: "",
@@ -318,7 +309,6 @@ async function openClient(phone, forceCreate = false) {
     }
   );
 
-  // Storico transazioni in tempo reale
   const transRef = collection(db, "clients", phone, "transactions");
   const qTrans = query(transRef, orderBy("timestamp", "desc"));
 
@@ -410,8 +400,6 @@ btnSave.addEventListener("click", async () => {
     );
 
     showStatus("Salvato");
-
-    // dopo il salvataggio pulisco i campi di ricerca + risultati
     clearSearchInputs();
     clearSearchResults();
 
@@ -447,6 +435,7 @@ btnSubManual.addEventListener("click", () => {
 
 // ===============================
 // CHANGE POINTS + WHATSAPP AUTO
+// (promo SOLO se non ha ancora storico punti)
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
@@ -460,6 +449,10 @@ async function changePoints(delta) {
 
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
+
+    // Controllo se è il PRIMO movimento (nessuna transazione esistente)
+    const transSnap = await getDocs(transCol);
+    const isFirstTimePoints = transSnap.empty;
 
     // aggiorno i punti nel cliente
     await setDoc(
@@ -479,28 +472,33 @@ async function changePoints(delta) {
 
     showStatus(`Punti: ${oldValue} → ${newValue}`);
 
-    // prepara testo WhatsApp
+    // preparo messaggio WhatsApp
     const now = new Date();
     const expiry = new Date(now);
-    expiry.setFullYear(expiry.getFullYear() + 1);   // scadenza tra 1 anno
+    expiry.setFullYear(expiry.getFullYear() + 1);
     const expiryText = expiry.toLocaleDateString("it-IT");
 
-    const text = encodeURIComponent(
+    let message =
       `Ciao ${firstName.value || ""}!\n` +
       `Il tuo saldo punti aggiornato è ${newValue}.\n` +
-      `I tuoi punti scadono il ${expiryText}.`
-    );
+      `I tuoi punti scadono il ${expiryText}.`;
 
-    // prendo solo le cifre dal numero (niente +, spazi, ecc.)
+    // SOLO SE È LA PRIMA VOLTA (nessuno storico + punti > 0)
+    if (isFirstTimePoints && newValue > 0) {
+      message +=
+        `\n\nSalva questo numero in rubrica come "Merceria Pina tessera punti" ` +
+        `per ricevere promozioni e offerte.`;
+    }
+
+    const text = encodeURIComponent(message);
+
     let digits = (currentPhone || "").replace(/\D/g, "");
-
     if (digits) {
       if (digits.startsWith("39")) {
         // ok
       } else if (digits.startsWith("3")) {
         digits = "39" + digits;
       }
-
       window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
     }
 
@@ -544,6 +542,7 @@ btnWhats.addEventListener("click", () => {
 
   window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
+
 // ===============================
 // BACKUP CLIENTI IN CSV
 // ===============================
@@ -551,7 +550,6 @@ btnExportCsv.addEventListener("click", async () => {
   try {
     showStatus("Preparazione backup in corso...");
 
-    // 1️⃣ Leggo tutti i clienti
     const snap = await getDocs(collection(db, "clients"));
     const rows = [];
 
@@ -560,7 +558,6 @@ btnExportCsv.addEventListener("click", async () => {
       return;
     }
 
-    // intestazione CSV
     rows.push("phone;firstName;lastName;notes;points");
 
     snap.forEach((docSnap) => {
@@ -574,18 +571,15 @@ btnExportCsv.addEventListener("click", async () => {
       rows.push(`${phone};${fn};${ln};${nt};${pts}`);
     });
 
-    // 2️⃣ Creo il contenuto CSV
     const csvContent = rows.join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 
-    // 3️⃣ Nome file con data
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
     const dd = String(now.getDate()).padStart(2, "0");
     const fileName = `backup_clienti_${yyyy}-${mm}-${dd}.csv`;
 
-    // 4️⃣ Creo link temporaneo per scaricare
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -595,13 +589,75 @@ btnExportCsv.addEventListener("click", async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    // 5️⃣ Messaggio chiaro
-    const count = rows.length - 1; // tolgo la riga di intestazione
+    const count = rows.length - 1;
     showStatus(`Backup CSV scaricato (${count} clienti). Controlla la cartella Download del browser.`);
 
   } catch (err) {
     console.error(err);
     showStatus("Errore durante il backup CSV", true);
+  }
+});
+
+// ===============================
+// ESPORTA CONTATTI PER TELEFONO (VCF)
+// ===============================
+btnExportVcf.addEventListener("click", async () => {
+  try {
+    showStatus("Preparazione file contatti in corso...");
+
+    const snap = await getDocs(collection(db, "clients"));
+
+    if (snap.empty) {
+      showStatus("Nessun cliente da esportare come contatto", true);
+      return;
+    }
+
+    const lines = [];
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const idPhone = docSnap.id || "";
+
+      let phone = idPhone.toString().trim();
+      if (!phone.startsWith("+")) {
+        phone = phone.replace(/[^\d]/g, "");
+      }
+
+      const first = (data.firstName || "").toString().trim();
+      const last  = (data.lastName  || "").toString().trim();
+      const fullName = (first + " " + last).trim() || phone;
+
+      lines.push("BEGIN:VCARD");
+      lines.push("VERSION:3.0");
+      lines.push(`N:${last};${first};;;`);
+      lines.push(`FN:${fullName}`);
+      lines.push(`TEL;TYPE=CELL:${phone}`);
+      lines.push("END:VCARD");
+    });
+
+    const vcfContent = lines.join("\r\n");
+    const blob = new Blob([vcfContent], { type: "text/vcard;charset=utf-8;" });
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const fileName = `contatti_clienti_${yyyy}-${mm}-${dd}.vcf`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showStatus("File contatti VCF scaricato. Importalo dal telefono per creare/aggiornare la rubrica.");
+
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore durante l'esportazione contatti (VCF)", true);
   }
 });
 
@@ -674,3 +730,4 @@ btnResetAllPoints.addEventListener("click", async () => {
     showStatus("Errore durante l'azzeramento globale", true);
   }
 });
+
