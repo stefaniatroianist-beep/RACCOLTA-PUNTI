@@ -47,54 +47,56 @@
         </div>
       </div>
 
-    <!-- ============================ -->
-<!-- OPERAZIONI GLOBALI -->
-<!-- ============================ -->
-<section class="card">
-  <h3>Operazioni globali</h3>
+      <!-- ============================ -->
+      <!-- OPERAZIONI GLOBALI -->
+      <!-- ============================ -->
+      <section class="card">
+        <h3>Operazioni globali</h3>
 
-  <p class="status" style="margin-bottom: 0.5rem;">
-    Questi pulsanti agiscono su <strong>tutti</strong> i clienti. Usali con attenzione.
-  </p>
+        <p class="status" style="margin-bottom: 0.5rem;">
+          Questi pulsanti agiscono su <strong>tutti</strong> i clienti. Usali con attenzione.
+        </p>
 
-  <div class="actions" style="flex-direction: column; align-items: stretch; gap: 0.8rem;">
-    <button id="btnExportCsv">📥 Backup clienti (CSV)</button>
+        <div class="actions" style="flex-direction: column; align-items: stretch; gap: 0.8rem;">
+          <button id="btnExportCsv">📥 Backup clienti (CSV)</button>
 
-    <button id="btnResetAllPoints" class="danger">
-      🧹 Azzera punti per TUTTI i clienti
-    </button>
-  </div>
+          <button id="btnResetAllPoints" class="danger">
+            🧹 Azzera punti per TUTTI i clienti
+          </button>
 
-  <!-- 👉 SPAZIO AGGIUNTO SOTTO i pulsanti -->
-  <div style="height: 80px;"></div>
-</section>
+          <!-- NUOVO PULSANTE: esporta contatti per rubrica (VCF) -->
+          <button id="btnExportVcf">
+            📇 Esporta contatti in rubrica (VCF)
+          </button>
+        </div>
 
+        <!-- Spazio per separare dai blocchi successivi -->
+        <div style="height: 80px;"></div>
+      </section>
 
+      <!-- ============================ -->
+      <!-- RICERCA CLIENTE: TELEFONO -->
+      <!-- ============================ -->
+      <section class="search">
 
-<!-- ============================ -->
-<!-- RICERCA CLIENTE: TELEFONO -->
-<!-- ============================ -->
-<section class="search">
+        <label>Numero di telefono (accesso/ricerca)</label>
+        <div class="row">
+          <input id="phoneInput" placeholder="es. 3478552229 o +39 347...">
+          <button id="btnLoad">Apri scheda</button>
+          <button id="btnNew">Nuovo cliente</button>
+        </div>
 
-  <label>Numero di telefono (accesso/ricerca)</label>
-  <div class="row">
-    <input id="phoneInput" placeholder="es. 3478552229 o +39 347...">
-    <button id="btnLoad">Apri scheda</button>
-    <button id="btnNew">Nuovo cliente</button>
-  </div>
+        <!-- ============================ -->
+        <!-- RICERCA PER NOME/COGNOME -->
+        <!-- ============================ -->
+        <label style="margin-top:1rem;">Ricerca per nome o cognome</label>
+        <div class="row">
+          <input id="nameSearchInput" placeholder="es. Maria, Rossi, Maria Rossi">
+          <button id="btnSearchName">Cerca</button>
+        </div>
 
-  <!-- ============================ -->
-  <!-- RICERCA PER NOME/COGNOME -->
-  <!-- ============================ -->
-  <label style="margin-top:1rem;">Ricerca per nome o cognome</label>
-  <div class="row">
-    <input id="nameSearchInput" placeholder="es. Maria, Rossi, Maria Rossi">
-    <button id="btnSearchName">Cerca</button>
-  </div>
+      </section>
 
-</section>
-
-      
       <!-- RISULTATI RICERCA -->
       <section id="searchResults" class="card hidden">
         <h3>Risultati ricerca</h3>
@@ -153,7 +155,6 @@
         <h3>Storico transazioni</h3>
         <div id="transactionsList" class="transactions"></div>
 
-        <!-- Pulsanti normali scheda cliente -->
         <div class="actions">
           <button id="btnSave">💾 Salva</button>
           <button id="btnWhats">💬 WhatsApp</button>
