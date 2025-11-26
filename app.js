@@ -61,6 +61,7 @@ const pointsValue = document.getElementById("pointsValue");
 const btnSave = document.getElementById("btnSave");
 const btnWhats = document.getElementById("btnWhats");
 const btnDelete = document.getElementById("btnDelete");
+const btnExportCsv = document.getElementById("btnExportCsv");
 
 const manualDelta = document.getElementById("manualDelta");
 const btnAddManual = document.getElementById("btnAddManual");
@@ -542,6 +543,59 @@ btnWhats.addEventListener("click", () => {
   }
 
   window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
+});
+// ===============================
+// BACKUP CLIENTI IN CSV
+// ===============================
+btnExportCsv.addEventListener("click", async () => {
+  try {
+    showStatus("Preparazione backup in corso...");
+
+    // 1️⃣ Leggo tutti i clienti
+    const snap = await getDocs(collection(db, "clients"));
+    const rows = [];
+
+    // intestazione CSV
+    rows.push("phone;firstName;lastName;notes;points");
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const phone = docSnap.id || "";
+      const firstName = (data.firstName || "").toString().replace(/[\r\n;]/g, " ");
+      const lastName  = (data.lastName  || "").toString().replace(/[\r\n;]/g, " ");
+      const notes     = (data.notes     || "").toString().replace(/[\r\n;]/g, " ");
+      const points    = (data.points != null ? data.points : 0);
+
+      rows.push(`${phone};${firstName};${lastName};${notes};${points}`);
+    });
+
+    // 2️⃣ Creo il contenuto CSV
+    const csvContent = rows.join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+    // 3️⃣ Nome file con data
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const fileName = `backup_clienti_${yyyy}-${mm}-${dd}.csv`;
+
+    // 4️⃣ Creo link temporaneo per scaricare
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showStatus("Backup CSV scaricato");
+
+  } catch (err) {
+    console.error(err);
+    showStatus("Errore durante il backup CSV", true);
+  }
 });
 
 // ===============================
