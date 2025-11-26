@@ -486,8 +486,8 @@ async function changePoints(delta) {
     // SOLO SE È LA PRIMA VOLTA (nessuno storico + punti > 0)
     if (isFirstTimePoints && newValue > 0) {
       message +=
-        `\n\nSalva questo numero in rubrica come "Merceria Pina tessera punti" ` +
-        `per ricevere promozioni e offerte.`;
+       "Salva questo numero in rubrica per ricevere le promozioni di Pina & Co."
+
     }
 
     const text = encodeURIComponent(message);
