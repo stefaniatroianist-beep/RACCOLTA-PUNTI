@@ -71,29 +71,37 @@
 
 
 
+<!-- ============================ -->
+<!-- RICERCA CLIENTE: TELEFONO -->
+<!-- ============================ -->
+<section class="search" 
+         style="margin-top:40px; padding:25px; border:2px solid #ddd; border-radius:12px;">
 
-      <!-- ============================ -->
-      <!-- RICERCA CLIENTE: TELEFONO -->
-      <!-- ============================ -->
-      <section class="search">
+  <label style="font-size:1.1rem; font-weight:bold;">Numero di telefono (accesso/ricerca)</label>
+  <div class="row" style="margin-bottom:20px; gap:12px;">
+    <input id="phoneInput"
+           style="flex:1; padding:14px; font-size:1.1rem;"
+           placeholder="es. 3478552229 o +39 347...">
+    <button id="btnLoad" style="padding:14px 18px;">Apri scheda</button>
+    <button id="btnNew" style="padding:14px 18px;">Nuovo cliente</button>
+  </div>
 
-        <label>Numero di telefono (accesso/ricerca)</label>
-        <div class="row">
-          <input id="phoneInput" placeholder="es. 3478552229 o +39 347...">
-          <button id="btnLoad">Apri scheda</button>
-          <button id="btnNew">Nuovo cliente</button>
-        </div>
+  <!-- ============================ -->
+  <!-- RICERCA PER NOME/COGNOME -->
+  <!-- ============================ -->
+  <label style="margin-top:1rem; font-size:1.1rem; font-weight:bold;">
+    Ricerca per nome o cognome
+  </label>
+  <div class="row" style="margin-top:8px; gap:12px;">
+    <input id="nameSearchInput"
+           style="flex:1; padding:14px; font-size:1.1rem;"
+           placeholder="es. Maria, Rossi, Maria Rossi">
+    <button id="btnSearchName" style="padding:14px 18px;">Cerca</button>
+  </div>
 
-        <!-- ============================ -->
-        <!-- RICERCA PER NOME/COGNOME -->
-        <!-- ============================ -->
-        <label style="margin-top:1rem;">Ricerca per nome o cognome</label>
-        <div class="row">
-          <input id="nameSearchInput" placeholder="es. Maria, Rossi, Maria Rossi">
-          <button id="btnSearchName">Cerca</button>
-        </div>
-      </section>
+</section>
 
+      
       <!-- RISULTATI RICERCA -->
       <section id="searchResults" class="card hidden">
         <h3>Risultati ricerca</h3>
