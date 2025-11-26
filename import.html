@@ -1,1 +1,170 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Importa clienti in Tessera Punti</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 12px; }
+    h1 { margin-bottom: 12px; }
+    .card { border: 1px solid #eee; border-radius: 10px; padding: 16px; margin-top: 12px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    input[type="file"] { padding: 6px; }
+    button { padding: 10px 16px; cursor: pointer; border: 0; border-radius: 8px; background:#b30059; color:#fff; }
+    button[disabled] { opacity: .5; cursor: not-allowed; }
+    #log { background:#f7f7f7; border:1px solid #eee; border-radius:8px; padding:10px; min-height:140px; white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .muted { color:#666; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <h1>Importa clienti in Tessera Punti</h1>
+
+  <div class="card">
+    <p class="muted">
+      Carica il file <strong>clienti_puliti.csv</strong> (colonne: <code>phone, firstName, lastName, fullName</code>).<br>
+      I clienti saranno salvati nella collezione <code>clients</code> con ID = numero normalizzato (<code>+39...</code>).
+    </p>
+    <div class="row">
+      <input id="fileInput" type="file" accept=".csv" />
+      <button id="btnImport" disabled>Importa</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="log">Log pronto…</div>
+  </div>
+
+  <script type="module">
+    // Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    // Config (stessa della tua app)
+    const firebaseConfig = {
+      apiKey: "AIzaSyCctBq0nelD9HsjjmghFdSs6rN1vBA67Co",
+      authDomain: "tessera-punti-pina.firebaseapp.com",
+      projectId: "tessera-punti-pina",
+      storageBucket: "tessera-punti-pina.firebasestorage.app",
+      messagingSenderId: "280210595024",
+      appId: "1:280210595024:web:2c056ee1c34ba8cf76d2d5",
+      measurementId: "G-S2XMRXLMJ5"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const fileInput = document.getElementById("fileInput");
+    const btnImport = document.getElementById("btnImport");
+    const logEl = document.getElementById("log");
+
+    function log(msg) {
+      logEl.textContent += (logEl.textContent ? "\n" : "") + msg;
+    }
+    function clearLog() { logEl.textContent = ""; }
+
+    function normalizePhoneForId(raw) {
+      // Tieni solo cifre
+      let digits = (raw || "").replace(/\D/g, "");
+      if (!digits) return "";
+
+      // se inizia con 3 (es. 347...) aggiungi 39
+      if (digits.startsWith("3")) digits = "39" + digits;
+
+      // usa + davanti, come il resto dell'app
+      return "+" + digits;
+    }
+
+    // Abilita bottone quando c'è un file
+    fileInput.addEventListener("change", () => {
+      btnImport.disabled = !fileInput.files?.length;
+    });
+
+    // Messaggio sul login (se servono regole restrittive)
+    onAuthStateChanged(auth, (user) => {
+      if (!user) log("⚠️ Se le regole Firestore richiedono login, apri prima la pagina principale e accedi.");
+      else log("✅ Autenticata come: " + (user.email || "utente"));
+    });
+
+    btnImport.addEventListener("click", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      clearLog();
+      log("Lettura file: " + file.name);
+
+      const text = await file.text();
+
+      // Parser CSV basico
+      const rows = text.split(/\r?\n/).filter(r => r.trim().length > 0);
+
+      if (!rows.length) {
+        log("❌ Nessuna riga valida trovata.");
+        return;
+      }
+
+      // Intestazione
+      const header = rows[0].split(",").map(s => s.trim().replace(/^"|"$/g, ""));
+      const idxPhone = header.findIndex(h => h.toLowerCase() === "phone");
+      const idxFirst = header.findIndex(h => h.toLowerCase() === "firstname");
+      const idxLast  = header.findIndex(h => h.toLowerCase() === "lastname");
+
+      if (idxPhone === -1 || idxFirst === -1 || idxLast === -1) {
+        log("❌ Intestazione CSV non valida. Devono esserci le colonne: phone, firstName, lastName.");
+        log("Intestazione trovata: " + header.join(", "));
+        return;
+      }
+
+      let ok = 0, err = 0;
+      const total = rows.length - 1;
+      log(`Inizio import: ~${total} righe da elaborare…`);
+
+      const toWrite = [];
+      for (let i = 1; i < rows.length; i++) {
+        const raw = rows[i];
+        const cols = raw.split(",").map(s => s.trim().replace(/^"|"$/g, ""));
+        if (!cols[idxPhone]) continue;
+
+        const phoneRaw = cols[idxPhone] || "";
+        const phoneId  = normalizePhoneForId(phoneRaw);
+        if (!phoneId) {
+          err++; log(`Riga ${i}: telefono non valido (${phoneRaw})`);
+          continue;
+        }
+
+        const firstName = cols[idxFirst] || "";
+        const lastName  = cols[idxLast]  || "";
+
+        toWrite.push({ phoneId, firstName, lastName });
+      }
+
+      // Esecuzione
+      for (let i = 0; i < toWrite.length; i++) {
+        const c = toWrite[i];
+        const ref = doc(db, "clients", c.phoneId);
+        try {
+          await setDoc(ref, {
+            firstName: c.firstName,
+            lastName: c.lastName,
+            notes: "",
+            points: 0,
+            importedAt: new Date()
+          }, { merge: true });
+          ok++;
+        } catch (e) {
+          err++; log(`Errore su ${c.phoneId}: ${e.message}`);
+        }
+
+        if ((i+1) % 50 === 0) {
+          log(`Progresso: ${i+1} / ${toWrite.length}`);
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+
+      log(`\n✅ Import completato. OK: ${ok} | Errori: ${err}`);
+    });
+  </script>
+</body>
+</html>
 
