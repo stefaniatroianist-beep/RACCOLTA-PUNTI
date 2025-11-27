@@ -71,6 +71,9 @@ const btnSubManual = document.getElementById("btnSubManual");
 const status = document.getElementById("status");
 const transactionsList = document.getElementById("transactionsList");
 
+// 🔹 Contatore tessere
+const clientCountSpan = document.getElementById("clientCount");
+
 // Search by name/surname
 const nameSearchInput = document.getElementById("nameSearchInput");
 const btnSearchName = document.getElementById("btnSearchName");
@@ -93,6 +96,22 @@ function clearSearchInputs() {
 function clearSearchResults() {
   if (searchResults) searchResults.classList.add("hidden");
   if (searchResultsList) searchResultsList.innerHTML = "";
+}
+
+// ===============================
+// AGGIORNA CONTATORE CLIENTI
+// ===============================
+async function updateClientCount() {
+  if (!clientCountSpan) return;
+
+  try {
+    clientCountSpan.textContent = "…";
+    const snap = await getDocs(collection(db, "clients"));
+    clientCountSpan.textContent = snap.size;
+  } catch (err) {
+    console.error("Errore nel conteggio clienti:", err);
+    clientCountSpan.textContent = "?";
+  }
 }
 
 // ===============================
@@ -144,6 +163,10 @@ onAuthStateChanged(auth, (user) => {
     appSection.classList.remove("hidden");
     currentUserEmail.textContent = user.email || "";
     loginStatus.textContent = "";
+
+    // 🔹 aggiorno contatore tessere all'accesso
+    updateClientCount();
+
   } else {
     appSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
@@ -154,6 +177,7 @@ onAuthStateChanged(auth, (user) => {
     hideCard();
     clearSearchResults();
     clearSearchInputs();
+    if (clientCountSpan) clientCountSpan.textContent = "—";
   }
 });
 
@@ -403,6 +427,9 @@ btnSave.addEventListener("click", async () => {
     clearSearchInputs();
     clearSearchResults();
 
+    // 🔹 Potrei aver creato un nuovo cliente → aggiorno contatore
+    updateClientCount();
+
   } catch (err) {
     console.error(err);
     showStatus("Errore nel salvataggio", true);
@@ -487,7 +514,6 @@ async function changePoints(delta) {
     if (isFirstTimePoints && newValue > 0) {
       message +=
        "Salva questo numero in rubrica per ricevere le promozioni di Pina & Co."
-
     }
 
     const text = encodeURIComponent(message);
@@ -708,6 +734,10 @@ btnDelete.addEventListener("click", async () => {
     await deleteDoc(clientRef);
 
     showStatus("Cliente e storico punti eliminati");
+
+    // 🔹 aggiorno contatore tessere dopo eliminazione
+    updateClientCount();
+
     hideCard();
     clearSearchInputs();
     clearSearchResults();
