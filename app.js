@@ -513,7 +513,7 @@ async function changePoints(delta) {
     // SOLO SE È LA PRIMA VOLTA (nessuno storico + punti > 0)
     if (isFirstTimePoints && newValue > 0) {
       message +=
-       "Salva questo numero in rubrica per ricevere le promozioni di Pina & Co."
+        "\nSalva questo numero in rubrica per ricevere le promozioni di Pina & Co.";
     }
 
     const text = encodeURIComponent(message);
@@ -646,8 +646,11 @@ btnExportVcf.addEventListener("click", async () => {
       // se non c'è numero valido, salto
       if (!digits) return;
 
-      // se inizia con 3 (es. 347...), aggiungo prefisso 39
-      if (digits.startsWith("3")) {
+      // 🔴 CORREZIONE: niente 3939 o ++39
+      if (digits.startsWith("39")) {
+        // già con prefisso internazionale corretto
+      } else if (digits.startsWith("3")) {
+        // es: 347... → 39 347...
         digits = "39" + digits;
       }
 
@@ -714,10 +717,8 @@ btnDelete.addEventListener("click", async () => {
   if (!confirm("Eliminare questo cliente e TUTTO lo storico punti?")) return;
 
   try {
-    // riferimento al documento cliente
     const clientRef = doc(db, "clients", currentPhone);
 
-    // 1️⃣ cancello tutte le transazioni nella sottocollezione "transactions"
     const transRef = collection(db, "clients", currentPhone, "transactions");
     const transSnap = await getDocs(transRef);
 
@@ -727,10 +728,7 @@ btnDelete.addEventListener("click", async () => {
       ops.push(deleteDoc(docSnap.ref));
     });
 
-    // eseguo le cancellazioni delle transazioni
     await Promise.all(ops);
-
-    // 2️⃣ ora cancello il documento principale del cliente
     await deleteDoc(clientRef);
 
     showStatus("Cliente e storico punti eliminati");
@@ -800,4 +798,3 @@ btnResetAllPoints.addEventListener("click", async () => {
     showStatus("Errore durante l'azzeramento globale", true);
   }
 });
-
