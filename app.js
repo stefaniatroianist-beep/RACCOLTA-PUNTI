@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebas
 import {
   getFirestore, doc, setDoc, getDoc, onSnapshot, deleteDoc,
   collection, addDoc, serverTimestamp, query, orderBy, getDocs,
-  where, Timestamp
+  where, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
@@ -65,13 +65,16 @@ const btnDelete = document.getElementById("btnDelete");
 const btnExportCsv = document.getElementById("btnExportCsv");
 const btnExportVcf = document.getElementById("btnExportVcf");
 
-// 🔹 NUOVO: esporta SOLO nuovi da data
+// 🔹 Export SOLO NUOVI (da data)
+const exportFromDate = document.getElementById("exportFromDate"); // <input type="date">
 const btnExportVcfNew = document.getElementById("btnExportVcfNew");
 
+// Manual points
 const manualDelta = document.getElementById("manualDelta");
 const btnAddManual = document.getElementById("btnAddManual");
 const btnSubManual = document.getElementById("btnSubManual");
 
+// UI
 const status = document.getElementById("status");
 const transactionsList = document.getElementById("transactionsList");
 
@@ -90,7 +93,19 @@ let unsubscribeTransactions = null;
 let currentPhone = null;
 
 // ===============================
-// Utility UI
+// Utility: status
+// ===============================
+function showStatus(msg, isError = false) {
+  if (!status) return;
+  status.textContent = msg;
+  status.style.color = isError ? "var(--danger)" : "#333";
+  setTimeout(() => {
+    if (status.textContent === msg) status.textContent = "";
+  }, 4000);
+}
+
+// ===============================
+// Utility: pulizia ricerca
 // ===============================
 function clearSearchInputs() {
   if (phoneInput) phoneInput.value = "";
@@ -102,96 +117,84 @@ function clearSearchResults() {
   if (searchResultsList) searchResultsList.innerHTML = "";
 }
 
-function showStatus(msg, isError = false) {
-  if (!status) return;
-  status.textContent = msg;
-  status.style.color = isError ? "var(--danger)" : "#333";
-  setTimeout(() => {
-    if (status.textContent === msg) status.textContent = "";
-  }, 4000);
+// ===============================
+// PHONE NORMALIZATION (ID documento)
+// - Ritorna SEMPRE: "+39XXXXXXXXXX" (una volta sola)
+// ===============================
+function normalizePhone(p) {
+  let digits = (p || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  // Se arriva tipo 0039....
+  if (digits.startsWith("00")) digits = digits.slice(2);
+
+  // Se arriva già con 39 davanti -> ok
+  if (digits.startsWith("39")) {
+    return "+" + digits;
+  }
+
+  // Se è un cellulare italiano (3...) -> aggiungo 39
+  if (digits.startsWith("3")) {
+    return "+39" + digits;
+  }
+
+  // fallback (non dovrebbe servire)
+  return "+" + digits;
 }
 
 // ===============================
-// DATE helpers
+// Utility numero per wa.me / VCF
+// - prende un phone (id documento tipo "+39347..." o "347..." ecc)
+// - restituisce digits SENZA "+", SEMPRE con 39 una sola volta: "39347...."
 // ===============================
-function formatDDMMYYYY(d) {
+function phoneToDigits39(phone) {
+  let digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("00")) digits = digits.slice(2);
+
+  if (digits.startsWith("39")) return digits;
+  if (digits.startsWith("3")) return "39" + digits;
+
+  return digits;
+}
+
+// ===============================
+// Utility: format date (GG/MM/AAAA)
+// ===============================
+function formatDateIT(d) {
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function parseDDMMYYYY(input) {
-  // input: "12/12/2025"
-  const s = (input || "").trim();
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  const dd = parseInt(m[1], 10);
-  const mm = parseInt(m[2], 10);
-  const yyyy = parseInt(m[3], 10);
-  const d = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-  if (isNaN(d.getTime())) return null;
-  return d;
+// ===============================
+// Utility: prende createdAt (Firestore Timestamp) e ritorna GG/MM/AAAA
+// ===============================
+function createdAtToLabel(data) {
+  // preferisco createdAt; se non c'è, provo updatedAt
+  let dt = null;
+
+  if (data?.createdAt?.toDate) dt = data.createdAt.toDate();
+  else if (data?.updatedAt?.toDate) dt = data.updatedAt.toDate();
+  else if (data?.updatedAt instanceof Date) dt = data.updatedAt;
+
+  if (!dt) return ""; // se manca
+  return formatDateIT(dt);
 }
 
 // ===============================
-// PHONE NORMALIZATION (anti doppio 39)
-// Ritorna: { digits: "39xxxxxxxxxx", e164: "+39xxxxxxxxxx" } oppure null
-// ===============================
-function normalizeItalyPhoneToE164(raw) {
-  let digits = (raw || "").toString().replace(/\D/g, "");
-  if (!digits) return null;
-
-  // 0039... -> 39...
-  if (digits.startsWith("00")) digits = digits.slice(2);
-
-  // casi strani: 3939....
-  while (digits.startsWith("3939") && digits.length > 12) {
-    digits = digits.slice(2); // toglie un "39"
-  }
-
-  // mobile italiano: 10 cifre che iniziano con 3 -> aggiungo 39
-  if (digits.length === 10 && digits.startsWith("3")) {
-    digits = "39" + digits;
-  }
-
-  // se è già 39 + 10 cifre (12 totali) ok
-  // se è un fisso 0xxxxxxxxx: NON lo forzo (ma Whatsapp spesso vuole +39...)
-  if (digits.startsWith("0")) {
-    // fisso: se vuoi, puoi gestirlo diversamente.
-    // qui lo trasformo comunque in +39 + numero senza 0? NO, non lo faccio.
-    // Lo lascio così (ma potrebbe non essere valido per WA).
-    // Se preferisci: digits = "39" + digits; (dimmi e lo cambio)
-  } else if (!digits.startsWith("39") && digits.startsWith("3")) {
-    // se per qualche motivo è 3... ma non 10 cifre, provo comunque ad aggiungere 39
-    digits = "39" + digits;
-  }
-
-  // pulizia finale (evita 39 duplicati “a metà”)
-  if (digits.startsWith("3939") && digits.length > 12) {
-    digits = "39" + digits.slice(4);
-  }
-
-  return { digits, e164: "+" + digits };
-}
-
-// Mantengo la tua normalizePhone per ID documento (con + davanti)
-function normalizePhone(p) {
-  const n = normalizeItalyPhoneToE164(p);
-  if (!n) return "";
-  // come ID in Firestore usi "+39..."
-  return n.e164;
-}
-
-// ===============================
-// AGGIORNA CONTATORE CLIENTI
+// AGGIORNA CONTATORE CLIENTI (senza leggere tutti i documenti)
 // ===============================
 async function updateClientCount() {
   if (!clientCountSpan) return;
+
   try {
     clientCountSpan.textContent = "…";
-    const snap = await getDocs(collection(db, "clients"));
-    clientCountSpan.textContent = snap.size;
+    const q = query(collection(db, "clients"));
+    const agg = await getCountFromServer(q);
+    clientCountSpan.textContent = agg.data().count;
   } catch (err) {
     console.error("Errore nel conteggio clienti:", err);
     clientCountSpan.textContent = "?";
@@ -239,6 +242,7 @@ onAuthStateChanged(auth, (user) => {
     appSection?.classList.remove("hidden");
     if (currentUserEmail) currentUserEmail.textContent = user.email || "";
     if (loginStatus) loginStatus.textContent = "";
+
     updateClientCount();
   } else {
     appSection?.classList.add("hidden");
@@ -247,6 +251,7 @@ onAuthStateChanged(auth, (user) => {
     if (loginEmail) loginEmail.value = "";
     if (loginPassword) loginPassword.value = "";
     if (loginStatus) loginStatus.textContent = "";
+
     hideCard();
     clearSearchResults();
     clearSearchInputs();
@@ -372,12 +377,7 @@ async function openClient(phone, forceCreate = false) {
         renderClient(phone, snap.data());
       } else {
         if (forceCreate) {
-          renderClient(phone, {
-            firstName: "",
-            lastName: "",
-            notes: "",
-            points: 0
-          });
+          renderClient(phone, { firstName: "", lastName: "", notes: "", points: 0 });
         } else {
           showStatus("Cliente non trovato", true);
           hideCard();
@@ -411,8 +411,7 @@ async function openClient(phone, forceCreate = false) {
 // RENDER CLIENT
 // ===============================
 function renderClient(phone, data) {
-  if (!card) return;
-  card.classList.remove("hidden");
+  card?.classList.remove("hidden");
   if (phoneField) phoneField.value = phone;
 
   if ("firstName" in data && firstName) firstName.value = data.firstName || "";
@@ -455,8 +454,7 @@ function renderTransactions(arr) {
 }
 
 // ===============================
-// SAVE CLIENT DATA
-// createdAt SOLO prima creazione
+// SAVE CLIENT DATA (createdAt SOLO alla prima creazione)
 // ===============================
 btnSave?.addEventListener("click", async () => {
   if (!currentPhone) return;
@@ -464,9 +462,8 @@ btnSave?.addEventListener("click", async () => {
   const docRef = doc(db, "clients", currentPhone);
 
   try {
-    // Serve per capire se è nuovo (altrimenti non mettiamo createdAt)
     const snap = await getDoc(docRef);
-    const isNew = !snap.exists();
+    const isNewClient = !snap.exists();
 
     const payload = {
       firstName: firstName?.value || "",
@@ -475,9 +472,8 @@ btnSave?.addEventListener("click", async () => {
       updatedAt: serverTimestamp()
     };
 
-    if (isNew) {
-      payload.createdAt = serverTimestamp();
-    }
+    // createdAt SOLO se nuovo
+    if (isNewClient) payload.createdAt = serverTimestamp();
 
     await setDoc(docRef, payload, { merge: true });
 
@@ -485,7 +481,9 @@ btnSave?.addEventListener("click", async () => {
     clearSearchInputs();
     clearSearchResults();
 
-    updateClientCount();
+    // nuovo cliente => aggiorno contatore
+    if (isNewClient) updateClientCount();
+
   } catch (err) {
     console.error(err);
     showStatus("Errore nel salvataggio", true);
@@ -518,7 +516,6 @@ btnSubManual?.addEventListener("click", () => {
 
 // ===============================
 // CHANGE POINTS + WHATSAPP AUTO
-// promo SOLO se non ha ancora storico punti
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
@@ -528,21 +525,20 @@ async function changePoints(delta) {
 
   try {
     const snap = await getDoc(docRef);
-    const oldValue = snap.exists() ? snap.data().points || 0 : 0;
+    const data = snap.exists() ? snap.data() : {};
+    const oldValue = data.points || 0;
 
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
 
-    // primo movimento?
-    const transSnap = await getDocs(transCol);
-    const isFirstTimePoints = transSnap.empty;
-
+    // aggiorno punti
     await setDoc(
       docRef,
       { points: newValue, updatedAt: serverTimestamp() },
       { merge: true }
     );
 
+    // storico
     await addDoc(transCol, {
       delta,
       oldValue,
@@ -553,28 +549,23 @@ async function changePoints(delta) {
 
     showStatus(`Punti: ${oldValue} → ${newValue}`);
 
-    // Messaggio WhatsApp
+    // messaggio WhatsApp
     const now = new Date();
     const expiry = new Date(now);
     expiry.setFullYear(expiry.getFullYear() + 1);
     const expiryText = expiry.toLocaleDateString("it-IT");
 
-    let message =
-      `Ciao ${firstName?.value || ""}!\n` +
+    const message =
+      `Ciao ${(firstName?.value || "").trim()}!\n` +
       `Il tuo saldo punti aggiornato è ${newValue}.\n` +
       `I tuoi punti scadono il ${expiryText}.`;
 
-    if (isFirstTimePoints && newValue > 0) {
-      message += "\nSalva questo numero in rubrica per ricevere le promozioni di Pina & Co.";
+    const digits = phoneToDigits39(currentPhone);
+    if (digits) {
+      const text = encodeURIComponent(message);
+      window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
     }
 
-    const text = encodeURIComponent(message);
-
-    const n = normalizeItalyPhoneToE164(currentPhone);
-    if (!n) return;
-
-    // WhatsApp web: non può inviare “diretto”, apre la chat con testo pronto
-    window.open(`https://wa.me/${n.digits}?text=${text}`, "_blank");
   } catch (err) {
     console.error(err);
     showStatus("Errore durante la modifica punti", true);
@@ -594,19 +585,19 @@ btnWhats?.addEventListener("click", () => {
   expiry.setFullYear(expiry.getFullYear() + 1);
   const expiryText = expiry.toLocaleDateString("it-IT");
 
-  const text = encodeURIComponent(
-    `Ciao ${firstName?.value || ""}!\n` +
+  const message =
+    `Ciao ${(firstName?.value || "").trim()}!\n` +
     `Il tuo saldo punti aggiornato è ${punti}.\n` +
-    `I tuoi punti scadono il ${expiryText}.`
-  );
+    `I tuoi punti scadono il ${expiryText}.`;
 
-  const n = normalizeItalyPhoneToE164(currentPhone);
-  if (!n) {
+  const digits = phoneToDigits39(currentPhone);
+  if (!digits) {
     alert("Numero di telefono non valido");
     return;
   }
 
-  window.open(`https://wa.me/${n.digits}?text=${text}`, "_blank");
+  const text = encodeURIComponent(message);
+  window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
 
 // ===============================
@@ -633,9 +624,9 @@ btnExportCsv?.addEventListener("click", async () => {
       const ln = (data.lastName  || "").toString().replace(/[\r\n;]/g, " ");
       const nt = (data.notes     || "").toString().replace(/[\r\n;]/g, " ");
       const pts = (data.points != null ? data.points : 0);
+      const createdLabel = createdAtToLabel(data);
 
-      const c = data.createdAt?.toDate ? formatDDMMYYYY(data.createdAt.toDate()) : "";
-      rows.push(`${phone};${fn};${ln};${nt};${pts};${c}`);
+      rows.push(`${phone};${fn};${ln};${nt};${pts};${createdLabel}`);
     });
 
     const csvContent = rows.join("\r\n");
@@ -658,6 +649,7 @@ btnExportCsv?.addEventListener("click", async () => {
 
     const count = rows.length - 1;
     showStatus(`Backup CSV scaricato (${count} clienti).`);
+
   } catch (err) {
     console.error(err);
     showStatus("Errore durante il backup CSV", true);
@@ -665,49 +657,43 @@ btnExportCsv?.addEventListener("click", async () => {
 });
 
 // ===============================
-// VCF helpers
-// ===============================
-function buildVcard({ displayName, e164, uid }) {
-  // VCard 3.0
-  return (
-    "BEGIN:VCARD\r\n" +
-    "VERSION:3.0\r\n" +
-    `FN:${displayName}\r\n` +
-    `TEL;TYPE=CELL:${e164}\r\n` +
-    `UID:${uid}\r\n` +
-    "END:VCARD\r\n"
-  );
-}
-
-// ===============================
-// ESPORTA TUTTI I CONTATTI IN VCF
-// Nome: "PNC GG/MM/AAAA - Nome Cognome"
-// Data = createdAt (se manca, usa "—")
+// ESPORTA CONTATTI IN VCF (TUTTI) — NIENTE DOPPIO 39
+// Nome contatto: "PNC GG/MM/AAAA - Nome Cognome"
 // ===============================
 btnExportVcf?.addEventListener("click", async () => {
+  await exportVcfAll();
+});
+
+async function exportVcfAll() {
   try {
-    showStatus("Preparazione file contatti (TUTTI) in corso...");
+    showStatus("Preparazione file contatti (tutti) in corso...");
 
     const snap = await getDocs(collection(db, "clients"));
     const cards = [];
 
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
+      const digits = phoneToDigits39(docSnap.id);
 
-      const n = normalizeItalyPhoneToE164(docSnap.id);
-      if (!n) return;
+      if (!digits) return;
+
+      const fullNumber = "+" + digits;
 
       const fn = (data.firstName || "").toString().trim();
       const ln = (data.lastName  || "").toString().trim();
-      const baseName = `${fn} ${ln}`.trim() || n.e164;
+      const displayName = `${fn} ${ln}`.trim() || fullNumber;
 
-      const created = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-      const dateTag = created ? formatDDMMYYYY(created) : "—";
+      const dateLabel = createdAtToLabel(data) || "";
+      const vcardName = `PNC ${dateLabel ? dateLabel + " - " : ""}${displayName}`.trim();
 
-      const displayName = `PNC ${dateTag} - ${baseName}`;
-      const uid = n.digits; // per aiutare il merge su alcuni telefoni
+      const vcard =
+        "BEGIN:VCARD\r\n" +
+        "VERSION:3.0\r\n" +
+        `FN:${vcardName}\r\n` +
+        `TEL;TYPE=CELL:${fullNumber}\r\n` +
+        "END:VCARD\r\n";
 
-      cards.push(buildVcard({ displayName, e164: n.e164, uid }));
+      cards.push(vcard);
     });
 
     if (!cards.length) {
@@ -715,107 +701,81 @@ btnExportVcf?.addEventListener("click", async () => {
       return;
     }
 
-    const vcfContent = cards.join("\r\n");
-    const blob = new Blob([vcfContent], { type: "text/vcard;charset=utf-8;" });
+    downloadTextFile(cards.join("\r\n"), `contatti_clienti_TUTTI_${formatFileDate(new Date())}.vcf`, "text/vcard;charset=utf-8;");
+    showStatus(`VCF scaricato (tutti).`);
 
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const fileName = `contatti_PNC_TUTTI_${yyyy}-${mm}-${dd}.vcf`;
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showStatus(`VCF scaricato (${cards.length} contatti).`);
   } catch (err) {
     console.error(err);
     showStatus("Errore durante l'esportazione VCF", true);
   }
-});
+}
 
 // ===============================
-// ESPORTA SOLO NUOVI IN VCF (da una data)
-// Ti chiede: GG/MM/AAAA
-// Usa query su createdAt (quindi serve createdAt nei clienti)
+// ESPORTA CONTATTI IN VCF (SOLO NUOVI da una data) — MIGLIORE STRATEGIA
+// Richiede: <input type="date" id="exportFromDate"> e <button id="btnExportVcfNew">
 // ===============================
 btnExportVcfNew?.addEventListener("click", async () => {
+  if (!exportFromDate?.value) {
+    showStatus("Scegli una data per esportare i nuovi clienti", true);
+    return;
+  }
+
+  // input type="date" -> "YYYY-MM-DD"
+  const from = new Date(exportFromDate.value + "T00:00:00");
+  await exportVcfNewFromDate(from);
+});
+
+async function exportVcfNewFromDate(fromDate) {
   try {
-    const input = prompt("Esporta NUOVI clienti da che data? (GG/MM/AAAA)", "");
-    if (input === null) return;
+    showStatus("Preparazione file contatti (solo nuovi) in corso...");
 
-    const fromDate = parseDDMMYYYY(input);
-    if (!fromDate) {
-      showStatus("Data non valida. Usa GG/MM/AAAA", true);
-      return;
-    }
-
-    showStatus("Preparazione VCF (solo nuovi) in corso...");
-
-    const fromTs = Timestamp.fromDate(fromDate);
-    const q = query(
+    // createdAt >= fromDate
+    const qNew = query(
       collection(db, "clients"),
-      where("createdAt", ">=", fromTs),
-      orderBy("createdAt", "asc")
+      where("createdAt", ">=", fromDate)
     );
 
-    const snap = await getDocs(q);
+    const snap = await getDocs(qNew);
     const cards = [];
 
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
+      const digits = phoneToDigits39(docSnap.id);
+      if (!digits) return;
 
-      const n = normalizeItalyPhoneToE164(docSnap.id);
-      if (!n) return;
+      const fullNumber = "+" + digits;
 
       const fn = (data.firstName || "").toString().trim();
       const ln = (data.lastName  || "").toString().trim();
-      const baseName = `${fn} ${ln}`.trim() || n.e164;
+      const displayName = `${fn} ${ln}`.trim() || fullNumber;
 
-      const created = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-      const dateTag = created ? formatDDMMYYYY(created) : "—";
+      const dateLabel = createdAtToLabel(data) || formatDateIT(new Date());
+      const vcardName = `PNC ${dateLabel} - ${displayName}`.trim();
 
-      const displayName = `PNC ${dateTag} - ${baseName}`;
-      const uid = n.digits;
+      const vcard =
+        "BEGIN:VCARD\r\n" +
+        "VERSION:3.0\r\n" +
+        `FN:${vcardName}\r\n` +
+        `TEL;TYPE=CELL:${fullNumber}\r\n` +
+        "END:VCARD\r\n";
 
-      cards.push(buildVcard({ displayName, e164: n.e164, uid }));
+      cards.push(vcard);
     });
 
     if (!cards.length) {
-      showStatus("Nessun nuovo cliente da esportare in quella data", true);
+      showStatus("Nessun nuovo cliente trovato in quell’intervallo", true);
       return;
     }
 
-    const vcfContent = cards.join("\r\n");
-    const blob = new Blob([vcfContent], { type: "text/vcard;charset=utf-8;" });
+    const fromLabel = formatFileDate(fromDate);
+    downloadTextFile(cards.join("\r\n"), `contatti_clienti_NUOVI_dal_${fromLabel}.vcf`, "text/vcard;charset=utf-8;");
+    showStatus(`VCF scaricato (solo nuovi): ${cards.length} contatti.`);
 
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const fileName = `contatti_PNC_NUOVI_da_${input.replace(/\//g, "-")}_${yyyy}-${mm}-${dd}.vcf`;
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showStatus(`VCF NUOVI scaricato (${cards.length} contatti).`);
   } catch (err) {
     console.error(err);
-    showStatus("Errore durante l'esportazione VCF NUOVI", true);
+    showStatus("Errore durante l'esportazione VCF nuovi", true);
   }
-});
+}
 
 // ===============================
 // DELETE CLIENT (cliente + storico punti)
@@ -831,16 +791,19 @@ btnDelete?.addEventListener("click", async () => {
     const transSnap = await getDocs(transRef);
 
     const ops = [];
-    transSnap.forEach((docSnap) => ops.push(deleteDoc(docSnap.ref)));
+    transSnap.forEach((d) => ops.push(deleteDoc(d.ref)));
     await Promise.all(ops);
 
     await deleteDoc(clientRef);
 
     showStatus("Cliente e storico punti eliminati");
+
     updateClientCount();
+
     hideCard();
     clearSearchInputs();
     clearSearchResults();
+
   } catch (err) {
     console.error(err);
     showStatus("Errore nell'eliminazione completa", true);
@@ -895,3 +858,25 @@ btnResetAllPoints?.addEventListener("click", async () => {
     showStatus("Errore durante l'azzeramento globale", true);
   }
 });
+
+// ===============================
+// Helper download / filename date
+// ===============================
+function formatFileDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function downloadTextFile(content, fileName, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
