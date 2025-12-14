@@ -71,7 +71,7 @@ const btnSubManual = document.getElementById("btnSubManual");
 const status = document.getElementById("status");
 const transactionsList = document.getElementById("transactionsList");
 
-// 🔹 Contatore tessere
+// Contatore tessere
 const clientCountSpan = document.getElementById("clientCount");
 
 // Search by name/surname
@@ -106,30 +106,39 @@ function showStatus(msg, isError = false) {
 }
 
 // ===============================
-// PHONE NORMALIZATION (anti doppio 39)
-// - italyDigits: per wa.me / vcf (senza +) => "39XXXXXXXXXX"
-// - canonicalId: per Firestore doc id => "+39XXXXXXXXXX"
-// - legacyId: vecchio formato possibile => "+347XXXXXXXXX" (solo se numero mobile)
+// PHONE NORMALIZATION (definitiva anti doppio 39)
+// - Restituisce SEMPRE "39XXXXXXXXXX" (senza +) per Italia
+// - Toglie prefissi doppi (0039, 3939, 390039, ecc)
 // ===============================
 function italyDigits(anyPhone) {
   let digits = (anyPhone || "").toString().replace(/\D/g, "");
   if (!digits) return "";
 
-  // 0039xxxx -> 39xxxx
-  if (digits.startsWith("0039")) digits = digits.slice(2);
+  // 00... davanti
+  while (digits.startsWith("00")) digits = digits.slice(2);
 
-  // rimuove 39 ripetuti: 3939xxxx -> 39xxxx (ripete finché serve)
-  while (digits.startsWith("3939")) {
-    digits = digits.slice(2);
-  }
+  // se rimane 0039...
+  if (digits.startsWith("0039")) digits = digits.slice(2); // -> 39...
 
-  // se è mobile italiano senza prefisso (347...) -> 39 + numero
+  // elimina ripetizioni di 39 all'inizio: 3939..., 393939...
+  while (digits.startsWith("3939")) digits = digits.slice(2);
+
+  // casi tipo 390039...
+  if (digits.startsWith("390039")) digits = "39" + digits.slice(6);
+
+  // se è mobile senza prefisso (347...)
   if (digits.startsWith("3")) digits = "39" + digits;
 
-  // se è già 39...
-  if (digits.startsWith("39")) return digits;
+  // se ora inizia con 39, ok
+  if (digits.startsWith("39")) {
+    // ulteriore sicurezza: se ci sono ancora 39 doppi
+    while (digits.startsWith("39") && digits.slice(2).startsWith("39")) {
+      digits = digits.slice(2);
+    }
+    return digits;
+  }
 
-  // fallback (numero estero o formato strano): restituisco le cifre così com’è
+  // fallback (estero): restituisco così com'è
   return digits;
 }
 
@@ -138,39 +147,53 @@ function canonicalIdFromInput(anyPhone) {
   return d ? `+${d}` : "";
 }
 
-function legacyIdFromCanonical(canonId) {
-  // canonId: +39xxxxxxxxxx
-  const d = italyDigits(canonId); // 39xxxxxxxxxx
+function legacyIdFromCanon(canonId) {
+  // canon: +39XXXXXXXXXX -> legacy: +347XXXXXXXX (solo se mobile)
+  const d = italyDigits(canonId); // 39...
   if (!d.startsWith("39")) return null;
+  const w = d.slice(2); // senza 39
+  if (!w.startsWith("3")) return null; // legacy ha senso solo per mobile
+  return `+${w}`;
+}
 
-  const without39 = d.slice(2); // xxxxxxxxxx
-  // ha senso solo se è un mobile che inizia con 3
-  if (!without39.startsWith("3")) return null;
-
-  return `+${without39}`; // +347...
+function double39IdFromCanon(canonId) {
+  // se esiste in db un vecchio id tipo +3939....
+  const d = italyDigits(canonId); // 39XXXXXXXXXX
+  if (!d.startsWith("39")) return null;
+  return `+39${d}`; // +3939XXXXXXXXXX
 }
 
 // ===============================
-// Resolve ID (fix clienti vecchi con +347...)
-// Se il canonico non esiste ma esiste il legacy, usa legacy.
-// Così NON creiamo doppioni e createdAt NON cambia.
+// Resolve ID (NON crea doppioni)
+// Prova in ordine:
+// 1) +39...
+// 2) +3939... (vecchio errore)
+// 3) +347... (legacy)
+// Se non esiste nessuno, usa +39... per creare nuovo
 // ===============================
 async function resolveClientDocId(inputPhoneOrId) {
   const canonical = canonicalIdFromInput(inputPhoneOrId);
   if (!canonical) return "";
 
-  const canonicalRef = doc(db, "clients", canonical);
-  const canonicalSnap = await getDoc(canonicalRef);
-  if (canonicalSnap.exists()) return canonical;
+  // 1) canonical
+  const snapCanon = await getDoc(doc(db, "clients", canonical));
+  if (snapCanon.exists()) return canonical;
 
-  const legacy = legacyIdFromCanonical(canonical);
-  if (legacy) {
-    const legacyRef = doc(db, "clients", legacy);
-    const legacySnap = await getDoc(legacyRef);
-    if (legacySnap.exists()) return legacy;
+  // 2) double39
+  const d39 = double39IdFromCanon(canonical);
+  if (d39) {
+    const snapD39 = await getDoc(doc(db, "clients", d39));
+    if (snapD39.exists()) return d39;
   }
 
-  // se non esiste nulla, useremo il canonico per creare nuovo
+  // 3) legacy +347...
+  const legacy = legacyIdFromCanon(canonical);
+  if (legacy) {
+    const snapLegacy = await getDoc(doc(db, "clients", legacy));
+    if (snapLegacy.exists()) return legacy;
+  }
+
+  // non esiste niente -> crea nuovo con canonical
   return canonical;
 }
 
@@ -381,7 +404,6 @@ async function openClient(phoneId, forceCreate = false) {
         renderClient(phoneId, snap.data());
       } else {
         if (forceCreate) {
-          // Mostra scheda vuota (NON crea il doc qui)
           renderClient(phoneId, {
             firstName: "",
             lastName: "",
@@ -466,8 +488,9 @@ function renderTransactions(arr) {
 
 // ===============================
 // SAVE CLIENT DATA
-// ✅ createdAt SOLO se il documento NON esiste (vera prima creazione)
-// ✅ non cambia createdAt se premi salva su cliente già esistente
+// ✅ createdAt SOLO se il doc NON esiste (vera prima creazione)
+// ✅ se premi salva su cliente vecchio NON cambia createdAt
+// ✅ IMPORTANTISSIMO: currentPhone è già “risolto”, quindi non crea un nuovo doc
 // ===============================
 btnSave?.addEventListener("click", async () => {
   if (!currentPhone) return;
@@ -496,7 +519,6 @@ btnSave?.addEventListener("click", async () => {
     clearSearchResults();
 
     if (isNewClient) updateClientCount();
-
   } catch (err) {
     console.error(err);
     showStatus("Errore nel salvataggio", true);
@@ -529,8 +551,8 @@ btnSubManual?.addEventListener("click", () => {
 
 // ===============================
 // CHANGE POINTS + WHATSAPP AUTO
-// ✅ Messaggio "Salva questo numero..." SOLO alla PRIMA transazione punti
-// ✅ Numero WhatsApp anti doppio 39
+// ✅ Promo SOLO alla prima transazione
+// ✅ Numero anti doppio 39 (sempre)
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
@@ -545,18 +567,17 @@ async function changePoints(delta) {
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
 
-    // prima transazione? (nessun doc nello storico)
+    // PRIMA transazione? (nessun doc nello storico)
     const transSnap = await getDocs(transCol);
     const isFirstTransaction = transSnap.empty;
 
-    // aggiorno i punti (NON tocco createdAt)
+    // aggiorno punti (NON tocco createdAt)
     await setDoc(
       docRef,
       { points: newValue, updatedAt: serverTimestamp() },
       { merge: true }
     );
 
-    // salvo nello storico
     await addDoc(transCol, {
       delta,
       oldValue,
@@ -580,6 +601,7 @@ async function changePoints(delta) {
       `Il tuo saldo punti aggiornato è ${newValue}.\n` +
       `I tuoi punti scadono il ${expiryText}.`;
 
+    // SOLO prima volta
     if (isFirstTransaction) {
       message += `\nSalva questo numero in rubrica per ricevere le promozioni di Pina & Co.`;
     }
@@ -588,10 +610,7 @@ async function changePoints(delta) {
 
     // wa.me vuole 39XXXXXXXXXX (senza +)
     const digits = italyDigits(currentPhone);
-    if (digits) {
-      window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
-    }
-
+    if (digits) window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
   } catch (err) {
     console.error(err);
     showStatus("Errore durante la modifica punti", true);
@@ -600,7 +619,6 @@ async function changePoints(delta) {
 
 // ===============================
 // WHATSAPP (invio manuale)
-// ✅ anti doppio 39
 // ===============================
 btnWhats?.addEventListener("click", () => {
   if (!currentPhone) return;
@@ -622,11 +640,7 @@ btnWhats?.addEventListener("click", () => {
   const text = encodeURIComponent(message);
   const digits = italyDigits(currentPhone);
 
-  if (!digits) {
-    alert("Numero di telefono non valido");
-    return;
-  }
-
+  if (!digits) return alert("Numero di telefono non valido");
   window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
 });
 
@@ -638,10 +652,7 @@ btnExportCsv?.addEventListener("click", async () => {
     showStatus("Preparazione backup in corso...");
 
     const snap = await getDocs(collection(db, "clients"));
-    if (snap.empty) {
-      showStatus("Nessun cliente da esportare", true);
-      return;
-    }
+    if (snap.empty) return showStatus("Nessun cliente da esportare", true);
 
     const rows = [];
     rows.push("phone;firstName;lastName;notes;points;createdAt");
@@ -676,7 +687,6 @@ btnExportCsv?.addEventListener("click", async () => {
     URL.revokeObjectURL(url);
 
     showStatus(`Backup CSV scaricato (${rows.length - 1} clienti).`);
-
   } catch (err) {
     console.error(err);
     showStatus("Errore durante il backup CSV", true);
@@ -685,15 +695,15 @@ btnExportCsv?.addEventListener("click", async () => {
 
 // ===============================
 // ESPORTA CONTATTI IN VCF
-// ✅ solo clienti creati DA una data (gg/mm/aaaa) in poi
-// ✅ nome contatto include data creazione
-// ✅ anti doppio 39 (sempre +39... una sola volta)
+// ✅ Filtra SOLO per createdAt (che ora NON viene falsato dal tasto Salva)
+// ✅ Numero sempre "+39..." una sola volta
+// ✅ Nome include data creazione
 // ===============================
 btnExportVcf?.addEventListener("click", async () => {
   try {
     const fromStr = prompt(
       "Esporta contatti creati DA questa data (gg/mm/aaaa).\n" +
-      "Lascia vuoto per esportare TUTTI i contatti.\n\nEsempio: 01/12/2025",
+      "Lascia vuoto per esportare TUTTI.\n\nEsempio: 01/12/2025",
       ""
     );
 
@@ -712,18 +722,16 @@ btnExportVcf?.addEventListener("click", async () => {
       const data = docSnap.data() || {};
       const createdAtDate = data.createdAt?.toDate ? data.createdAt.toDate() : null;
 
-      // filtro: solo creati da quella data
-      if (fromDate && createdAtDate) {
+      if (fromDate) {
+        // se manca createdAt NON lo consideriamo "nuovo"
+        if (!createdAtDate) return;
         if (createdAtDate.getTime() < fromDate.getTime()) return;
       }
-      // se filtro attivo e createdAt mancante, non esportare (per evitare “falsi nuovi”)
-      if (fromDate && !createdAtDate) return;
 
-      // numero in formato IT corretto: +39xxxxxxxxxx (una sola volta)
-      const digits = italyDigits(docSnap.id);
+      const digits = italyDigits(docSnap.id);     // 39XXXXXXXXXX
       if (!digits) return;
 
-      const fullNumber = "+" + digits;
+      const fullNumber = "+" + digits;            // +39XXXXXXXXXX (una sola volta)
 
       const fn = (data.firstName || "").toString().trim();
       const ln = (data.lastName  || "").toString().trim();
@@ -731,8 +739,6 @@ btnExportVcf?.addEventListener("click", async () => {
       if (!displayName) displayName = fullNumber;
 
       const createdText = createdAtDate ? formatDateDDMMYYYY(createdAtDate) : "—";
-
-      // es: "Pina & Co 14/12/2025 - Mario Rossi"
       const vcardName = `Pina & Co ${createdText} - ${displayName}`;
 
       const vcard =
@@ -745,10 +751,7 @@ btnExportVcf?.addEventListener("click", async () => {
       cards.push(vcard);
     });
 
-    if (!cards.length) {
-      showStatus("Nessun contatto da esportare (con quel filtro).", true);
-      return;
-    }
+    if (!cards.length) return showStatus("Nessun contatto da esportare (con quel filtro).", true);
 
     const vcfContent = cards.join("\r\n");
     const blob = new Blob([vcfContent], { type: "text/vcard;charset=utf-8;" });
@@ -761,6 +764,7 @@ btnExportVcf?.addEventListener("click", async () => {
     const suffix = fromDate
       ? `_da_${String(fromDate.getDate()).padStart(2,"0")}-${String(fromDate.getMonth()+1).padStart(2,"0")}-${fromDate.getFullYear()}`
       : "";
+
     const fileName = `contatti_clienti${suffix}_${yyyy}-${mm}-${dd}.vcf`;
 
     const url = URL.createObjectURL(blob);
@@ -773,7 +777,6 @@ btnExportVcf?.addEventListener("click", async () => {
     URL.revokeObjectURL(url);
 
     showStatus(`VCF scaricato (${cards.length} contatti).`);
-
   } catch (err) {
     console.error(err);
     showStatus("Errore durante l'esportazione VCF", true);
@@ -805,7 +808,6 @@ btnDelete?.addEventListener("click", async () => {
     hideCard();
     clearSearchInputs();
     clearSearchResults();
-
   } catch (err) {
     console.error(err);
     showStatus("Errore nell'eliminazione completa", true);
