@@ -86,20 +86,81 @@ let unsubscribeTransactions = null;
 let currentPhone = null;
 
 // ===============================
-// Utility: pulizia campi ricerca
+// Utility UI
 // ===============================
 function clearSearchInputs() {
   if (phoneInput) phoneInput.value = "";
   if (nameSearchInput) nameSearchInput.value = "";
 }
-
 function clearSearchResults() {
   if (searchResults) searchResults.classList.add("hidden");
   if (searchResultsList) searchResultsList.innerHTML = "";
 }
+function showStatus(msg, isError = false) {
+  if (!status) return;
+  status.textContent = msg;
+  status.style.color = isError ? "var(--danger)" : "#333";
+  setTimeout(() => {
+    if (status.textContent === msg) status.textContent = "";
+  }, 4000);
+}
 
 // ===============================
-// AGGIORNA CONTATORE CLIENTI
+// PHONE NORMALIZATION (anti doppio 39)
+// - normalizePhoneForId: salva come "+39XXXXXXXXXX"
+// - phoneToItalyDigits: per wa.me e vcf, restituisce "39XXXXXXXXXX" (senza +)
+// ===============================
+function phoneToItalyDigits(anyPhone) {
+  let digits = (anyPhone || "").toString().replace(/\D/g, "");
+  if (!digits) return "";
+
+  // se ha 0039...
+  if (digits.startsWith("0039")) digits = digits.slice(2); // -> 39...
+
+  // elimina prefissi 39 doppi: 3939XXXXXXXX -> 39XXXXXXXX
+  while (digits.startsWith("3939")) {
+    digits = digits.slice(2);
+  }
+
+  // se è un cellulare italiano scritto senza prefisso (347....)
+  if (digits.startsWith("3")) digits = "39" + digits;
+
+  // se è già 39...
+  if (digits.startsWith("39")) return digits;
+
+  // fallback: se non capiamo, restituiamo digits così com'è
+  return digits;
+}
+
+function normalizePhoneForId(input) {
+  const digits = phoneToItalyDigits(input);
+  if (!digits) return "";
+  // id nel db: "+39..."
+  return "+" + digits;
+}
+
+// ===============================
+// DATE helpers
+// ===============================
+function formatDateDDMMYYYY(d) {
+  return d.toLocaleDateString("it-IT");
+}
+function parseDDMMYYYY(s) {
+  // accetta "gg/mm/aaaa"
+  const txt = (s || "").trim();
+  if (!txt) return null;
+  const m = txt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const dd = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  const yyyy = parseInt(m[3], 10);
+  const dt = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+  if (isNaN(dt.getTime())) return null;
+  return dt;
+}
+
+// ===============================
+// UPDATE CLIENT COUNT
 // ===============================
 async function updateClientCount() {
   if (!clientCountSpan) return;
@@ -111,71 +172,6 @@ async function updateClientCount() {
     console.error("Errore nel conteggio clienti:", err);
     clientCountSpan.textContent = "?";
   }
-}
-
-// ===============================
-// PHONE NORMALIZATION (+39) per ID documento
-// (manteniamo: ID in Firestore in formato +39...)
-// ===============================
-function normalizePhone(p) {
-  let digits = (p || "").replace(/\D/g, "");
-  if (!digits) return "";
-
-  // Se inizia con 3 (347...), aggiungo 39 davanti
-  if (digits.startsWith("3")) digits = "39" + digits;
-
-  // Se per errore è già 3939..., lo sistemo (tiene un solo 39)
-  while (digits.startsWith("3939")) {
-    digits = "39" + digits.slice(4);
-  }
-
-  return "+" + digits;
-}
-
-// ===============================
-// Utility: numero per WhatsApp / VCF
-// - ritorna SOLO cifre, con prefisso 39 una sola volta
-// ===============================
-function phoneToDigits39(phoneLike) {
-  let digits = (phoneLike || "").replace(/\D/g, "");
-  if (!digits) return "";
-
-  // fix duplicazioni: 3939xxxx -> 39xxxx
-  while (digits.startsWith("3939")) {
-    digits = "39" + digits.slice(4);
-  }
-
-  if (digits.startsWith("39")) return digits;
-  if (digits.startsWith("3")) return "39" + digits;
-
-  // fallback: se arriva già strano, lo lasciamo com’è
-  return digits;
-}
-
-// ===============================
-// Utility: date dd/mm/yyyy
-// ===============================
-function formatDateIT(d) {
-  try {
-    return new Date(d).toLocaleDateString("it-IT");
-  } catch {
-    return "";
-  }
-}
-
-function parseDateIT(str) {
-  // accetta gg/mm/aaaa
-  const s = (str || "").trim();
-  if (!s) return null;
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  const dd = parseInt(m[1], 10);
-  const mm = parseInt(m[2], 10);
-  const yyyy = parseInt(m[3], 10);
-  const d = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-  // validazione base
-  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null;
-  return d;
 }
 
 // ===============================
@@ -235,22 +231,10 @@ onAuthStateChanged(auth, (user) => {
 });
 
 // ===============================
-// STATUS MESSAGE
-// ===============================
-function showStatus(msg, isError = false) {
-  if (!status) return;
-  status.textContent = msg;
-  status.style.color = isError ? "var(--danger)" : "#333";
-  setTimeout(() => {
-    if (status.textContent === msg) status.textContent = "";
-  }, 4000);
-}
-
-// ===============================
 // SEARCH / CREATE BY PHONE
 // ===============================
 btnNew?.addEventListener("click", () => {
-  const p = normalizePhone(phoneInput?.value);
+  const p = normalizePhoneForId(phoneInput?.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, true);
   clearSearchInputs();
@@ -258,7 +242,7 @@ btnNew?.addEventListener("click", () => {
 });
 
 btnLoad?.addEventListener("click", () => {
-  const p = normalizePhone(phoneInput?.value);
+  const p = normalizePhoneForId(phoneInput?.value);
   if (!p) return showStatus("Numero non valido", true);
   openClient(p, false);
   clearSearchInputs();
@@ -305,7 +289,6 @@ btnSearchName?.addEventListener("click", async () => {
 
 function renderSearchResults(matches, term) {
   if (!searchResultsList || !searchResults) return;
-
   searchResultsList.innerHTML = "";
 
   if (!matches.length) {
@@ -407,9 +390,9 @@ function renderClient(phone, data) {
   card.classList.remove("hidden");
   if (phoneField) phoneField.value = phone;
 
-  if ("firstName" in data && firstName) firstName.value = data.firstName || "";
-  if ("lastName" in data && lastName) lastName.value = data.lastName || "";
-  if ("notes" in data && notes) notes.value = data.notes || "";
+  if (firstName && ("firstName" in data)) firstName.value = data.firstName || "";
+  if (lastName && ("lastName" in data)) lastName.value = data.lastName || "";
+  if (notes && ("notes" in data)) notes.value = data.notes || "";
 
   if (pointsValue) pointsValue.textContent = data.points || 0;
 }
@@ -419,7 +402,6 @@ function renderClient(phone, data) {
 // ===============================
 function renderTransactions(arr) {
   if (!transactionsList) return;
-
   transactionsList.innerHTML = "";
   if (!arr.length) {
     transactionsList.innerHTML = "<em>Nessuna transazione</em>";
@@ -449,7 +431,7 @@ function renderTransactions(arr) {
 
 // ===============================
 // SAVE CLIENT DATA
-// ✅ createdAt SOLO la prima volta (non cambia mai)
+// ✅ FIX #2: createdAt si imposta SOLO se il cliente NON esiste già
 // ===============================
 btnSave?.addEventListener("click", async () => {
   if (!currentPhone) return;
@@ -457,12 +439,9 @@ btnSave?.addEventListener("click", async () => {
   const docRef = doc(db, "clients", currentPhone);
 
   try {
-    // Controllo se esiste già e se ha createdAt
     const snap = await getDoc(docRef);
-    const isNew = !snap.exists();
-    const hasCreatedAt = snap.exists() && ("createdAt" in (snap.data() || {}));
+    const isNewClient = !snap.exists();
 
-    // Prepariamo payload
     const payload = {
       firstName: firstName?.value || "",
       lastName: lastName?.value || "",
@@ -470,19 +449,19 @@ btnSave?.addEventListener("click", async () => {
       updatedAt: serverTimestamp()
     };
 
-    // Se è nuovo O se manca createdAt (vecchi record), lo impostiamo
-    if (isNew || !hasCreatedAt) {
+    // createdAt SOLO una volta (prima creazione)
+    if (isNewClient) {
       payload.createdAt = serverTimestamp();
     }
 
     await setDoc(docRef, payload, { merge: true });
 
-    showStatus("Salvato");
+    showStatus(isNewClient ? "Cliente creato e salvato" : "Salvato");
     clearSearchInputs();
     clearSearchResults();
 
-    // Potrei aver creato un nuovo cliente → aggiorno contatore
-    updateClientCount();
+    // contatore tessere: sale solo se davvero nuovo
+    if (isNewClient) updateClientCount();
 
   } catch (err) {
     console.error(err);
@@ -501,14 +480,14 @@ document.querySelectorAll(".points-buttons button").forEach((btn) => {
 });
 
 btnAddManual?.addEventListener("click", () => {
-  const v = parseInt(manualDelta?.value);
+  const v = parseInt(manualDelta?.value, 10);
   if (!v) return;
   changePoints(v);
   if (manualDelta) manualDelta.value = "";
 });
 
 btnSubManual?.addEventListener("click", () => {
-  const v = parseInt(manualDelta?.value);
+  const v = parseInt(manualDelta?.value, 10);
   if (!v) return;
   changePoints(-v);
   if (manualDelta) manualDelta.value = "";
@@ -516,7 +495,7 @@ btnSubManual?.addEventListener("click", () => {
 
 // ===============================
 // CHANGE POINTS + WHATSAPP AUTO
-// ✅ Messaggio “Salva questo numero...” SOLO se è la PRIMA transazione punti
+// ✅ FIX #1: messaggio “promo/salva numero” SOLO alla PRIMA transazione punti
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
@@ -531,14 +510,14 @@ async function changePoints(delta) {
     let newValue = oldValue + delta;
     if (newValue < 0) newValue = 0;
 
-    // PRIMA transazione?
+    // PRIMA transazione? (se non esiste ancora storico)
     const transSnap = await getDocs(transCol);
-    const isFirstTimePoints = transSnap.empty;
+    const isFirstTransaction = transSnap.empty;
 
-    // aggiorno punti e ultimo aggiornamento punti
+    // aggiorno punti (non tocco createdAt)
     await setDoc(
       docRef,
-      { points: newValue, updatedAt: serverTimestamp(), lastPointsUpdateAt: serverTimestamp() },
+      { points: newValue, updatedAt: serverTimestamp() },
       { merge: true }
     );
 
@@ -553,26 +532,28 @@ async function changePoints(delta) {
 
     showStatus(`Punti: ${oldValue} → ${newValue}`);
 
-    // Messaggio WhatsApp
+    // WhatsApp testo
     const now = new Date();
     const expiry = new Date(now);
     expiry.setFullYear(expiry.getFullYear() + 1);
-    const expiryText = expiry.toLocaleDateString("it-IT");
+    const expiryText = formatDateDDMMYYYY(expiry);
 
-    // 👉 SOLO la prima volta includo l’invito a salvare il numero
+    const nome = (firstName?.value || "").trim();
+
+    // SOLO PRIMA VOLTA: aggiunge la riga “Salva questo numero…”
     let message =
-      `Ciao ${(firstName?.value || "").trim()}!\n` +
+      `Ciao ${nome || ""}!\n` +
       `Il tuo saldo punti aggiornato è ${newValue}.\n` +
       `I tuoi punti scadono il ${expiryText}.`;
 
-    if (isFirstTimePoints && newValue > 0) {
+    if (isFirstTransaction) {
       message += `\nSalva questo numero in rubrica per ricevere le promozioni di Pina & Co.`;
     }
 
     const text = encodeURIComponent(message);
 
-    // Numero per wa.me (solo cifre + 39 una sola volta)
-    const digits = phoneToDigits39(currentPhone);
+    // numero per wa.me: 39XXXXXXXXXX (senza +)
+    const digits = phoneToItalyDigits(currentPhone);
     if (digits) {
       window.open(`https://wa.me/${digits}?text=${text}`, "_blank");
     }
@@ -585,26 +566,27 @@ async function changePoints(delta) {
 
 // ===============================
 // WHATSAPP (invio manuale)
-// (sempre messaggio “saldo + scadenza”, SENZA invito extra)
 // ===============================
 btnWhats?.addEventListener("click", () => {
   if (!currentPhone) return;
 
-  const punti = pointsValue?.textContent || "0";
+  const punti = (pointsValue?.textContent || "0").toString();
 
   const now = new Date();
   const expiry = new Date(now);
   expiry.setFullYear(expiry.getFullYear() + 1);
-  const expiryText = expiry.toLocaleDateString("it-IT");
+  const expiryText = formatDateDDMMYYYY(expiry);
+
+  const nome = (firstName?.value || "").trim();
 
   const message =
-    `Ciao ${(firstName?.value || "").trim()}!\n` +
+    `Ciao ${nome || ""}!\n` +
     `Il tuo saldo punti aggiornato è ${punti}.\n` +
     `I tuoi punti scadono il ${expiryText}.`;
 
   const text = encodeURIComponent(message);
+  const digits = phoneToItalyDigits(currentPhone);
 
-  const digits = phoneToDigits39(currentPhone);
   if (!digits) {
     alert("Numero di telefono non valido");
     return;
@@ -621,25 +603,25 @@ btnExportCsv?.addEventListener("click", async () => {
     showStatus("Preparazione backup in corso...");
 
     const snap = await getDocs(collection(db, "clients"));
-    const rows = [];
-
     if (snap.empty) {
       showStatus("Nessun cliente da esportare", true);
       return;
     }
 
+    const rows = [];
     rows.push("phone;firstName;lastName;notes;points;createdAt");
 
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
       const phone = docSnap.id || "";
       const fn = (data.firstName || "").toString().replace(/[\r\n;]/g, " ");
-      const ln = (data.lastName || "").toString().replace(/[\r\n;]/g, " ");
-      const nt = (data.notes || "").toString().replace(/[\r\n;]/g, " ");
+      const ln = (data.lastName  || "").toString().replace(/[\r\n;]/g, " ");
+      const nt = (data.notes     || "").toString().replace(/[\r\n;]/g, " ");
       const pts = (data.points != null ? data.points : 0);
-      const createdAt = data.createdAt?.toDate ? formatDateIT(data.createdAt.toDate()) : "";
 
-      rows.push(`${phone};${fn};${ln};${nt};${pts};${createdAt}`);
+      const created = data.createdAt?.toDate ? formatDateDDMMYYYY(data.createdAt.toDate()) : "";
+
+      rows.push(`${phone};${fn};${ln};${nt};${pts};${created}`);
     });
 
     const csvContent = rows.join("\r\n");
@@ -660,8 +642,8 @@ btnExportCsv?.addEventListener("click", async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    const count = rows.length - 1;
-    showStatus(`Backup CSV scaricato (${count} clienti). Controlla la cartella Download del browser.`);
+    showStatus(`Backup CSV scaricato (${rows.length - 1} clienti).`);
+
   } catch (err) {
     console.error(err);
     showStatus("Errore durante il backup CSV", true);
@@ -670,15 +652,19 @@ btnExportCsv?.addEventListener("click", async () => {
 
 // ===============================
 // ESPORTA CONTATTI IN VCF
-// ✅ fix doppio 39
-// ✅ include "Pina & Co" + data creazione nel nome contatto
-// ✅ opzionale: esporta SOLO clienti creati da una data (gg/mm/aaaa)
+// ✅ esporta "SOLO NUOVI" da una data (gg/mm/aaaa) in poi
+// ✅ nome contatto include data creazione
+// ✅ anti doppio 39
 // ===============================
 btnExportVcf?.addEventListener("click", async () => {
   try {
-    // filtro data (opzionale)
-    const fromStr = prompt("Esporta clienti creati DAL (gg/mm/aaaa).\nLascia vuoto per esportare TUTTI:");
-    const fromDate = parseDateIT(fromStr);
+    const fromStr = prompt(
+      "Esporta contatti creati DA questa data (gg/mm/aaaa).\n" +
+      "Lascia vuoto per esportare TUTTI i contatti.\n\nEsempio: 01/12/2025",
+      ""
+    );
+
+    const fromDate = parseDDMMYYYY(fromStr || "");
     if (fromStr && !fromDate) {
       showStatus("Formato data non valido. Usa gg/mm/aaaa", true);
       return;
@@ -692,31 +678,33 @@ btnExportVcf?.addEventListener("click", async () => {
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
 
-      // createdAt per filtro e per nome contatto
       const createdAtDate = data.createdAt?.toDate ? data.createdAt.toDate() : null;
 
+      // filtro: solo creati da quella data
       if (fromDate && createdAtDate) {
-        if (createdAtDate < fromDate) return; // troppo vecchio
+        if (createdAtDate.getTime() < fromDate.getTime()) return;
       }
-      // Se non c'è createdAt e c'è filtro, lo salto per sicurezza
+      // se filtro attivo e createdAt mancante, NON esportiamo (per non “sporcare” i nuovi)
       if (fromDate && !createdAtDate) return;
 
       // numero (id documento)
-      const digits39 = phoneToDigits39(docSnap.id);
-      if (!digits39) return;
+      const digits = phoneToItalyDigits(docSnap.id);
+      if (!digits) return;
 
-      const fullNumber = "+" + digits39;
+      const fullNumber = "+" + digits;
 
       const fn = (data.firstName || "").toString().trim();
-      const ln = (data.lastName || "").toString().trim();
+      const ln = (data.lastName  || "").toString().trim();
+
       let displayName = `${fn} ${ln}`.trim();
       if (!displayName) displayName = fullNumber;
 
-      const dateTag = createdAtDate ? formatDateIT(createdAtDate) : "";
-      // 👉 qui mettiamo "Pina & Co" + data nel nome contatto
-      const vcardName = dateTag
-        ? `Pina & Co ${dateTag} - ${displayName}`
-        : `Pina & Co - ${displayName}`;
+      // data nel nome contatto (dd/mm/yyyy)
+      const createdText = createdAtDate ? formatDateDDMMYYYY(createdAtDate) : "—";
+
+      // ✅ nome contatto per broadcast
+      // Esempio: "Pina & Co 14/12/2025 - Mario Rossi"
+      const vcardName = `Pina & Co ${createdText} - ${displayName}`;
 
       const vcard =
         "BEGIN:VCARD\r\n" +
@@ -729,7 +717,7 @@ btnExportVcf?.addEventListener("click", async () => {
     });
 
     if (!cards.length) {
-      showStatus("Nessun contatto da esportare con questo filtro", true);
+      showStatus("Nessun contatto da esportare (con quel filtro).", true);
       return;
     }
 
@@ -740,7 +728,9 @@ btnExportVcf?.addEventListener("click", async () => {
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
     const dd = String(now.getDate()).padStart(2, "0");
-    const fileName = `contatti_clienti_${yyyy}-${mm}-${dd}.vcf`;
+
+    const suffix = fromDate ? `_da_${String(fromDate.getDate()).padStart(2,"0")}-${String(fromDate.getMonth()+1).padStart(2,"0")}-${fromDate.getFullYear()}` : "";
+    const fileName = `contatti_clienti${suffix}_${yyyy}-${mm}-${dd}.vcf`;
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -751,7 +741,8 @@ btnExportVcf?.addEventListener("click", async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showStatus(`File contatti VCF scaricato (${cards.length} contatti)`);
+    showStatus(`VCF scaricato (${cards.length} contatti).`);
+
   } catch (err) {
     console.error(err);
     showStatus("Errore durante l'esportazione VCF", true);
@@ -768,23 +759,22 @@ btnDelete?.addEventListener("click", async () => {
   try {
     const clientRef = doc(db, "clients", currentPhone);
 
-    // cancello tutte le transazioni
     const transRef = collection(db, "clients", currentPhone, "transactions");
     const transSnap = await getDocs(transRef);
 
     const ops = [];
-    transSnap.forEach((d) => ops.push(deleteDoc(d.ref)));
+    transSnap.forEach((docSnap) => ops.push(deleteDoc(docSnap.ref)));
     await Promise.all(ops);
 
-    // cancello doc cliente
     await deleteDoc(clientRef);
 
     showStatus("Cliente e storico punti eliminati");
-
     updateClientCount();
+
     hideCard();
     clearSearchInputs();
     clearSearchResults();
+
   } catch (err) {
     console.error(err);
     showStatus("Errore nell'eliminazione completa", true);
@@ -815,7 +805,7 @@ btnResetAllPoints?.addEventListener("click", async () => {
       const newPoints = 0;
 
       operations.push(
-        setDoc(ref, { points: newPoints, updatedAt: serverTimestamp(), lastPointsUpdateAt: serverTimestamp() }, { merge: true })
+        setDoc(ref, { points: newPoints, updatedAt: serverTimestamp() }, { merge: true })
       );
 
       if (oldPoints !== 0) {
