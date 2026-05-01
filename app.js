@@ -548,7 +548,33 @@ btnSubManual?.addEventListener("click", () => {
   changePoints(-v);
   if (manualDelta) manualDelta.value = "";
 });
+async function ensureClientSavedBeforePoints() {
 
+  if (!currentPhone) return false;
+
+  const fn = (firstName?.value || "").trim();
+  const ln = (lastName?.value || "").trim();
+
+  if (!fn || !ln) return false;
+
+  const docRef = doc(db, "clients", currentPhone);
+  const snap = await getDoc(docRef);
+
+  const payload = {
+    firstName: fn,
+    lastName: ln,
+    notes: notes?.value || "",
+    updatedAt: serverTimestamp()
+  };
+
+  if (!snap.exists()) {
+    payload.createdAt = serverTimestamp();
+  }
+
+  await setDoc(docRef, payload, { merge: true });
+
+  return true;
+}
 // ===============================
 // CHANGE POINTS + WHATSAPP AUTO
 // ✅ Promo SOLO alla prima transazione
@@ -556,7 +582,7 @@ btnSubManual?.addEventListener("click", () => {
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
-
+await ensureClientSavedBeforePoints();
   const docRef = doc(db, "clients", currentPhone);
   const transCol = collection(docRef, "transactions");
 
@@ -815,8 +841,16 @@ btnDelete?.addEventListener("click", async () => {
 });
 
 function hideCard() {
+
   card?.classList.add("hidden");
+
   currentPhone = null;
+
+  if (firstName) firstName.value = "";
+  if (lastName) lastName.value = "";
+  if (notes) notes.value = "";
+  if (pointsValue) pointsValue.textContent = "0";
+
   if (unsubscribeRealtime) unsubscribeRealtime();
   if (unsubscribeTransactions) unsubscribeTransactions();
 }
