@@ -582,7 +582,11 @@ async function ensureClientSavedBeforePoints() {
 // ===============================
 async function changePoints(delta) {
   if (!currentPhone) return;
-await ensureClientSavedBeforePoints();
+const saved = await ensureClientSavedBeforePoints();
+if (!saved) {
+  showStatus("Inserisci nome e cognome prima di assegnare punti", true);
+  return;
+}
   const docRef = doc(db, "clients", currentPhone);
   const transCol = collection(docRef, "transactions");
 
